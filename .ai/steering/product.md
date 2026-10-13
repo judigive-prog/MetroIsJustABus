@@ -1,5 +1,3 @@
-# .ai/steering/product.md
-
 # MetroIsJustABus — Product Vision
 
 ## Value Proposition

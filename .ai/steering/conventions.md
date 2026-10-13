@@ -1,5 +1,3 @@
-# .ai/steering/conventions.md
-
 # Conventions — MetroIsJustABus
 
 The patterns beyond the linter. Numeric defaults (timeouts, page sizes, retry counts) are starting points: change them here when a performance test or a feature spec says otherwise. Where a feature spec is approved and conflicts with this file, stop and ask which one to update.
@@ -59,7 +57,7 @@ The patterns beyond the linter. Numeric defaults (timeouts, page sizes, retry co
 - A consumer checks `inbox_event` first, handles the event, and acknowledges only after the database commit. A repeat of the same `eventId` has no effect
 - A failing event is retried with backoff, then sent to the DLQ. A poison message never blocks its queue and is never requeued in a loop
 - Schemas live in `contracts/events`. Within a version, changes are additive and consumers ignore unknown fields. A breaking change is a new `version`, published alongside the old one during the transition
-- Notification dedupe key: (`eventId`, `userId`, `channel`). Overlapping subscriptions to the same change produce one notification (FR-065)
+- Notification dedupe key: (`eventId`, `userId`, `channel`), enforced by a unique constraint (FR-066). Overlapping subscriptions to the same change produce one notification (FR-065)
 
 ## Web (React)
 - TypeScript strict, no `any`. Use `unknown` and narrow
@@ -74,6 +72,7 @@ The patterns beyond the linter. Numeric defaults (timeouts, page sizes, retry co
 - Every service exposes `/health/live` and `/health/ready`. Readiness fails when a required dependency is missing
 - Environment variables are UPPER_SNAKE_CASE. Secrets arrive as `*_FILE` paths
 - Image tag = git SHA. The same image goes to dev and prod
+- Environments change only through version-controlled configuration and the pipeline, never by hand (NFR-094, NFR-097)
 
 ## Tests
 - Tests sit in a `tests/` folder inside the module they cover: `test_{behaviour}.py`

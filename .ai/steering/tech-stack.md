@@ -1,8 +1,27 @@
-# .ai/steering/tech-stack.md
-
 # Tech Stack — MetroIsJustABus
 
-**Status:** proposed. The project statement and the requirements specification (v0.2) fix no technologies, so every choice below is a team decision to confirm. The items still open are listed at the end under "Decisions to Confirm". Requirement IDs in brackets (NFR-xxx, FR-xxx) refer to the requirements specification.
+**Status:** adopted. The project statement and the requirements specification (v0.2) fix no technologies, so every choice below is a team decision. The few items that depend on information not yet available are listed at the end under "Open Items". Requirement IDs in brackets (NFR-xxx, FR-xxx) refer to the requirements specification.
+
+```mermaid
+flowchart LR
+  web[apps/web] --> traefik[Traefik]
+  vsim[validator-sim] --> traefik
+  dsim[disruption-sim] --> traefik
+  traefik --> core[core-backend]
+  traefik --> ticketing[ticketing-service]
+  traefik --> occupancy[occupancy-service]
+  traefik --> notification[notification-service]
+  core --> coredb[(core DB)]
+  ticketing --> ticketdb[(ticketing DB)]
+  occupancy --> occdb[(occupancy DB)]
+  notification --> notifdb[(notification DB)]
+  ticketing -->|REST| psim[payment-sim]
+  core -.->|events| mq{{RabbitMQ metro.events}}
+  ticketing -.->|events| mq
+  mq -.-> occupancy
+  mq -.-> notification
+  notification -->|SMTP| mailpit[Mailpit]
+```
 
 ## Repository layout
 
@@ -95,13 +114,13 @@ Ticket validation must be strongly consistent per ticket (FR-046, NFR-030). Row 
 The requirements need retries and a dead-letter queue (NFR-016), durable events that survive a consumer outage (NFR-021), and consumers that tolerate duplicates and reordering (NFR-014). RabbitMQ provides dead-letter exchanges, durable queues, a management UI and a built-in Prometheus endpoint with queue depth (NFR-071). Kafka would add operational weight this system's volume does not justify. Events are delivered at least once and without ordering guarantees, so every consumer must be idempotent.
 
 ### Why a transactional outbox and an inbox table?
-Publishing straight to the broker after a database commit can lose an event. Each publishing service writes the event to an `outbox` table in the same transaction as the state change. The relay worker then publishes it, reading with `select_for_update(skip_locked=True)` so several relays can run safely. Consumers record processed event ids in an `inbox` table with a unique constraint, so redelivery has no effect (NFR-013, NFR-015, NFR-022). Notification and occupancy outages never block purchase or validation (NFR-020).
+Publishing straight to the broker after a database commit can lose an event. Each publishing service writes the event to its `outbox_event` table in the same transaction as the state change. The relay worker then publishes it, reading with `select_for_update(skip_locked=True)` so several relays can run safely. Consumers record processed event ids in an `inbox_event` table with a unique constraint, so redelivery has no effect (NFR-013, NFR-015, NFR-022). Notification and occupancy outages never block purchase or validation (NFR-020).
 
 ### Why Celery is not used
 The only background work is the outbox relay and the event consumers. Both are small, long-running `manage.py` commands with explicit acknowledgement and retry rules. Celery would add its own broker topology and task semantics on top of the RabbitMQ design the requirements ask us to justify and test.
 
 ### Why REST/JSON for synchronous calls and JSON events for asynchronous ones?
-Purchase, validation and consultation need an immediate answer, and REST with OpenAPI is simple to test, document and consume from a browser or validator (NFR-010). Events use a common envelope: `eventId`, `type`, `version`, `occurredAt`, `correlationId`, `payload`. The Pydantic models in `metro_common` are the source for the JSON Schema and AsyncAPI document in `contracts/events` (NFR-006). Every inter-component call has a timeout and defined failure behaviour (NFR-012).
+Purchase, validation and consultation need an immediate answer, and REST with OpenAPI is simple to test, document and consume from a browser or validator (NFR-010). Events use a common envelope: `eventId`, `type`, `version`, `producer`, `occurredAt`, `correlationId`, `payload`. The Pydantic models in `metro_common` are the source for the JSON Schema and AsyncAPI document in `contracts/events` (NFR-006). Every inter-component call has a timeout and defined failure behaviour (NFR-012).
 
 ### Why code-first contracts with a drift check?
 DRF serializers and views are the single source. drf-spectacular generates the OpenAPI files, the event models generate the event schemas, and both are committed. The pipeline fails if a committed contract differs from the generated one or if a change breaks compatibility (checked with oasdiff). The contract is therefore always the current contract, and agents cannot change an interface silently.
@@ -120,14 +139,14 @@ The stateless services (web, the API and worker of each backend) run with at lea
 
 ## Delivery and Infrastructure
 
-- **Source control and CI/CD:** GitHub and GitHub Actions. A self-hosted runner runs on the development VM and executes the integration and system tests (NFR-095)
+- **Source control and CI/CD:** GitHub (where the team's repository lives) and GitHub Actions. A self-hosted runner runs on the development VM and executes the integration and system tests (NFR-095)
 - **Images:** one per component (API and worker share a backend's image), tagged with the git SHA (and a release version), pushed to GitHub Container Registry. The same image is promoted from dev to prod, never rebuilt (NFR-091, NFR-094)
 - **Environments:** `dev` and `prod` on separate VMs, each its own Swarm. Production deployment waits for a protected-environment approval after dev system tests and smoke checks pass (NFR-093)
 - **Provisioning:** Ansible playbooks for Docker, Swarm, firewall and runner, so environments are rebuilt from the repository (NFR-097)
 - **Configuration:** environment variables validated at startup with pydantic-settings. Secrets are Swarm secrets, read from `*_FILE` paths. Only `.env.example` is committed (NFR-054, NFR-099)
 - **Ingress/TLS:** Traefik
 - **Persistence and backup:** named volumes per database. Scheduled `pg_dump` per database to a backup volume copied off the host. Restore is documented and rehearsed (NFR-027)
-- **Time zone:** UTC in storage, `OPERATING_TIMEZONE` for display (NFR-033)
+- **Time zone:** UTC in storage, `OPERATING_TIMEZONE` (`Europe/Lisbon`) for display (NFR-033)
 
 ## Verification Tooling
 
@@ -156,13 +175,12 @@ The stateless services (web, the API and worker of each backend) run with at lea
 - **Dashboards and alerts:** Grafana and Alertmanager, with an alert for the failure of any single component (NFR-072)
 - **Log aggregation:** Loki with Grafana Alloy
 
-## Decisions to Confirm
+## Open Items
 
-1. Source host and CI: GitHub Actions assumed. Confirm against where the team's repository lives
-2. Infrastructure provider and VM sizing for dev and prod: unknown, so Ansible is used instead of provider-specific tooling
-3. TLS certificates: Let's Encrypt needs a public domain. Otherwise use an internal CA
-4. Docker Swarm against Kubernetes (k3s): chosen for effort, revisit if the team already knows Kubernetes
-5. Django 5.2 LTS is chosen over the newer 6.x releases for its longer support window (to April 2028) and wider package compatibility. Confirm that the DRF-related packages used (drf-spectacular, simplejwt) support the Django version at project start
-6. Synchronous gunicorn workers: revisit if the first performance test misses NFR-040 or NFR-041
-7. Operating time zone for display
-8. Occupancy attribution rule (A-03), notification channels (A-06) and NFR target values: still open in the requirements, and they constrain the occupancy and notification services
+The stack above is decided. These items wait on information the team does not have yet. None of them changes a choice above.
+
+1. Infrastructure provider and VM sizing for dev and prod: unknown, so Ansible is used instead of provider-specific tooling
+2. TLS certificates: Let's Encrypt needs a public domain. Otherwise use an internal CA
+3. Django 5.2 LTS is chosen over the newer 6.x releases for its longer support window (to April 2028) and wider package compatibility. Check that the DRF-related packages used (drf-spectacular, simplejwt) support it when the lockfile is first created
+4. Synchronous gunicorn workers: revisit only if the first performance test misses NFR-040 or NFR-041
+5. Occupancy attribution rule (A-03), notification channels (A-06) and NFR target values: still open in the requirements, and they constrain the occupancy and notification services
