@@ -16,7 +16,7 @@ MetroIsJustABus is a distributed software system for an urban bus network. It gi
 - Ticket validation at the stop entrance: the validator device submits ticket, validator and time, and the system accepts or rejects the attempt, returning a reason on every rejection
 - Staff back-office for network, schedules, ticket types and disruptions
 - Subscriptions to a line, stop or trip, with notification preferences and an in-app inbox
-- Estimated occupancy and crowding levels derived from boardings
+- Estimated occupancy and crowding levels derived from validations, subject to the approved occupancy attribution rule (A-03)
 - Independent, separately deployable components that talk through explicit APIs and events, and tolerate failures, duplicates and retries
 
 ## What This Product Is NOT
@@ -41,10 +41,10 @@ MetroIsJustABus is a distributed software system for an urban bus network. It gi
 3. Accounts and roles: sign-up, authentication, and enforced separation of visitor, passenger and staff
 4. Tickets: multiple ticket types, purchase with simulated payment, lifecycle states, and a ticket list per passenger
 5. Ticket validation: validity decision, recorded validations, concurrency-safe, and idempotent
-6. Occupancy: capacity per trip and estimated occupancy from boardings, with crowding levels for passengers and indicators for staff
-7. Subscriptions and notifications: subscribe to a line, stop or trip, set preferences, deduplicated delivery, in-app inbox and a sandboxed e-mail channel
+6. Occupancy: capacity per trip and estimated occupancy from attributed boardings, with crowding levels for passengers and indicators for staff. Mapping stop-entrance validations to trips depends on approval of A-03; until then, the attribution logic and resulting per-trip estimates are not ready for implementation
+7. Subscriptions and notifications: subscribe to a line, stop or trip, set preferences, deduplicated notification records, in-app inbox and a sandboxed e-mail channel. E-mail delivery is retried and may duplicate after an uncertain send outcome
 8. Staff back-office: network and schedule maintenance, ticket types, disruption management, and ticket usage queries
-9. Resilience: no duplicate tickets, validations or notifications. Events survive a component outage and are processed after recovery. Passengers see a visible degraded mode when information is stale
+9. Resilience: no duplicate tickets, validations or notification records. Events survive notification or occupancy service outages and are processed after recovery, provided the owning durable storage remains intact. Passengers see a visible degraded mode when information is stale. Host and storage failures follow the documented backup and recovery procedure
 
 ## Future Features (v2+)
 - Scheduled future-dated network changes
@@ -59,9 +59,10 @@ MetroIsJustABus is a distributed software system for an urban bus network. It gi
 
 ## Success Metrics
 Targets are proposed. The project statement gives none, and the team must confirm them (see the requirements specification, section 3.5).
+Before these become acceptance criteria, the team must approve the workload (data volume, concurrent users and request/event rates), test environment, warm/cold-cache conditions and measurement window. API latency is measured from ingress receipt to response completion, including synchronous dependencies; notification latency is measured from the triggering transaction's commit to inbox visibility or SMTP acceptance, separately by channel. Availability is measured for consultation and validation separately by external probes over the calendar month, with probe frequency, success criteria and maintenance exclusions agreed in advance. SMTP acceptance does not measure recipient delivery. The deployment does not promise uninterrupted service through loss of its single production host.
 - Availability of the production core (consultation and validation) of at least 99.5% per month
 - Read requests for lines, stops, schedules and departures: p95 under 500 ms
 - Ticket validation: p95 under 1 s
-- Notification issued within 30 s of the triggering event under nominal load
-- Zero duplicate tickets, validations or notifications in failure-injection tests
+- Notification visible in the inbox or accepted by sandbox SMTP within 30 s of the triggering transaction's commit under the agreed nominal load
+- Zero duplicate tickets, validations or notification records in failure-injection tests; e-mail retry and uncertain-send scenarios are reported separately
 - Consultation and unrelated functions keep working when the notification service is down

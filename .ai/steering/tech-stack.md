@@ -70,19 +70,19 @@ All backend services share one stack, so a team of five and the AI agents work w
 - **Metrics:** django-prometheus on `/metrics`; `/health/live` and `/health/ready` on every service
 - **Auth:** djangorestframework-simplejwt with asymmetric signing; argon2 password hasher
 
-Each backend runs as two processes from the same image: the **API** (gunicorn) and a **worker** (`manage.py` commands for the outbox relay and the event consumer). In deployment they are separate services, so they restart and scale independently.
+Each backend image supports separate deployment roles: the **API** (gunicorn), an **outbox relay** (`manage.py` command) when the backend publishes events, and an **event consumer** (`manage.py` command) for each consumer purpose it implements. Each role runs one foreground process in its own container and deployment service, so it restarts and scales independently. A backend does not deploy relay or consumer roles it does not need.
 
 **Why:** DRF provides what the requirements ask for with little custom code: serializers for server-side input validation (NFR-055), permission classes for role enforcement and "a passenger sees only their own data" (FR-100 to FR-102, NFR-050), authentication classes, pagination and throttling. Django migrations satisfy versioned schema management (NFR-088). The ORM supports `select_for_update()`, unique constraints and transactions, which ticket validation needs (see "Why PostgreSQL?"). The Django admin site is not enabled, to avoid an unneeded attack surface. The trade-off is that DRF runs on synchronous workers and is heavier than a micro-framework. That is acceptable for the targets in NFR-040 and NFR-041, and load is handled by workers and replicas. A load test (NFR-043) decides whether that holds.
 
 ### apps/web
 - **Framework:** React + Vite + TypeScript, built to static files and served by nginx
 - **UI:** Tailwind CSS + Radix primitives (accessible by default)
-- **Server state:** TanStack Query, with a persisted cache
+- **Server state:** TanStack Query; persistence is limited to an allowlist of public consultation queries. Authenticated data stays in memory, scoped by user; logout and account changes cancel outstanding requests and clear cached data
 - **Forms:** React Hook Form + Zod
-- **API client:** generated from the OpenAPI contracts (openapi-typescript)
+- **API client:** openapi-fetch, typed with openapi-typescript types generated from the OpenAPI contracts; one shared client wrapper handles authentication and errors
 - **i18n:** react-i18next, English first, text externalised
 
-**Why:** The app is a client of the backends and needs no server-side rendering, so a static build is the simplest thing to containerise and deploy (NFR-060, NFR-096). Radix covers keyboard and screen-reader behaviour for WCAG 2.1 AA (NFR-061). The persisted query cache lets consultation keep working with stale data when a backend is down, and the UI shows a visible stale/unavailable banner (NFR-023, NFR-024). A generated client means a contract change breaks the web build instead of failing at runtime. Staff pages live in the same app and are shown by role, as the requirements specify.
+**Why:** The app is a client of the backends and needs no server-side rendering, so a static build is the simplest thing to containerise and deploy (NFR-060, NFR-096). Radix provides keyboard and screen-reader primitives; application composition and accessibility checks must still establish WCAG 2.1 AA conformance (NFR-061). Persisted public consultation data lets returning users see cached information when a backend is down, with a visible stale/unavailable banner; a first visit without cached data shows an unavailable state (NFR-023, NFR-024). Generated types and `tsc --noEmit` catch incompatible client usage at build time, while contract and system tests verify runtime behaviour. Staff pages live in the same app and are shown by role, as the requirements specify.
 
 ### apps/core-backend
 Owns users and roles, network, schedules, trips and disruptions. Issues JWTs and publishes its public keys at a JWKS endpoint (a small custom view). Publishes `ScheduleChanged`, `DisruptionChanged` and `TripStatusChanged` through a transactional outbox.
@@ -91,10 +91,12 @@ Owns users and roles, network, schedules, trips and disruptions. Issues JWTs and
 Owns ticket types, purchases, tickets and validations. Calls `payment-sim` synchronously with an idempotency key. Publishes `TicketPurchased` and `TicketValidated` through a transactional outbox.
 
 ### apps/occupancy-service
-Owns boardings, occupancy estimates and aggregates. Consumes `TicketValidated` and `ScheduleChanged`. Boardings are estimated from validations, not measured (FR-056).
+Owns attributed boardings, occupancy estimates and aggregates. Consumes `TicketValidated` and `ScheduleChanged`. Boardings are estimated from validations, not measured (FR-056). Per-trip attribution and crowding calculations depend on approval of A-03: a stop-entrance validation contains no line or trip, so it cannot be counted against a trip without that rule. Distinct accepted validations must each contribute once even when delivered out of order; only state snapshots use entity-version filtering.
 
 ### apps/notification-service
 Owns subscriptions, preferences and notifications. Consumes the change events and `TicketPurchased`. Delivers to an in-app inbox and to e-mail through Django's SMTP backend. E-mail goes to Mailpit, a sandboxed SMTP server with a web inbox, never to real recipients (A-06).
+
+The unique event/user/channel key prevents duplicate notification records. E-mail attempts and outcomes are recorded separately and retried on failure. An uncertain SMTP outcome can produce a duplicate on retry; database deduplication does not make external delivery exactly once.
 
 ### simulators/
 Validator, payment and disruption simulators call the same public APIs as real clients. They are used in system tests, performance tests and the demo.
@@ -111,19 +113,23 @@ Library versions are pinned in each lockfile; image versions are pinned by tag a
 Ticket validation must be strongly consistent per ticket (FR-046, NFR-030). Row locks (`select_for_update()` inside `transaction.atomic()`) stop a journey being spent twice under concurrency. Unique constraints (`UniqueConstraint`) enforce idempotency in the database, not only in code: one purchase per idempotency key (FR-033), one validation per validation request id (FR-045), one notification per event, user and channel (FR-066). With `USE_TZ` enabled, timestamps are stored as UTC (NFR-033). `JSONField` holds the validity rules per ticket type so new types need no redesign (FR-048). A separate instance per service enforces "no shared database access across component boundaries" (NFR-004, NFR-032) and lets each service be restarted on its own (NFR-003).
 
 ### Why RabbitMQ?
-The requirements need retries and a dead-letter queue (NFR-016), durable events that survive a consumer outage (NFR-021), and consumers that tolerate duplicates and reordering (NFR-014). RabbitMQ provides dead-letter exchanges, durable queues, a management UI and a built-in Prometheus endpoint with queue depth (NFR-071). Kafka would add operational weight this system's volume does not justify. Events are delivered at least once and without ordering guarantees, so every consumer must be idempotent.
+The requirements need retries and a dead-letter queue (NFR-016), durable events that survive a consumer outage (NFR-021), and consumers that tolerate duplicates and reordering (NFR-014). RabbitMQ provides dead-letter exchanges, durable queues, a management UI and a built-in Prometheus endpoint with queue depth (NFR-071). Kafka would add operational weight this system's volume does not justify. Delivery is at least once: consumers must tolerate duplicates and out-of-order events.
+
+Durability requires durable exchanges and queues, persistent messages, topology declared before publishing, publisher confirms and mandatory routing. A relay keeps an event pending until it receives confirmation without a routing return; unconfirmed or unroutable publications are retried with the same event id and raise an operational alert. Retry and dead-letter transfers must use supported at-least-once dead-lettering or confirmed republishing before acknowledging the original delivery. Durable queues survive a broker restart with intact storage; a single broker and volume do not provide host or storage-loss resilience.
 
 ### Why a transactional outbox and an inbox table?
 Publishing straight to the broker after a database commit can lose an event. Each publishing service writes the event to its `outbox_event` table in the same transaction as the state change. The relay worker then publishes it, reading with `select_for_update(skip_locked=True)` so several relays can run safely. Consumers record processed event ids in an `inbox_event` table with a unique constraint, so redelivery has no effect (NFR-013, NFR-015, NFR-022). Notification and occupancy outages never block purchase or validation (NFR-020).
 
 ### Why Celery is not used
-The only background work is the outbox relay and the event consumers. Both are small, long-running `manage.py` commands with explicit acknowledgement and retry rules. Celery would add its own broker topology and task semantics on top of the RabbitMQ design the requirements ask us to justify and test.
+Background event work uses outbox relays and event consumers, deployed as separate long-running `manage.py` commands with explicit acknowledgement and retry rules. Notification delivery also needs a retryable sender command for persisted delivery attempts, deployed separately when that feature is implemented. Scheduled backup commands are infrastructure jobs. Celery would add its own broker topology and task semantics on top of the RabbitMQ design the requirements ask us to justify and test.
 
 ### Why REST/JSON for synchronous calls and JSON events for asynchronous ones?
 Purchase, validation and consultation need an immediate answer, and REST with OpenAPI is simple to test, document and consume from a browser or validator (NFR-010). Events use a common envelope: `eventId`, `type`, `version`, `producer`, `occurredAt`, `correlationId`, `payload`. The Pydantic models in `metro_common` are the source for the JSON Schema and AsyncAPI document in `contracts/events` (NFR-006). Every inter-component call has a timeout and defined failure behaviour (NFR-012).
 
 ### Why code-first contracts with a drift check?
-DRF serializers and views are the single source. drf-spectacular generates the OpenAPI files, the event models generate the event schemas, and both are committed. The pipeline fails if a committed contract differs from the generated one or if a change breaks compatibility (checked with oasdiff). The contract is therefore always the current contract, and agents cannot change an interface silently.
+DRF serializers and views define the HTTP contracts; Pydantic event models define the event payload contracts. drf-spectacular generates the OpenAPI files, the event models generate the event schemas, and both are committed. The pipeline fails if a committed contract differs from its generated form. For every supported API version, oasdiff compares the candidate with the released contract; event schemas have a separate compatibility check. A new major API or event schema version coexists with the old version until supported consumers have migrated.
+
+Independent deployment also requires consumer contracts to pass against the provider versions supported during rollout and rollback, including consumers already deployed in production. Regenerating types and building the current monorepo is not sufficient evidence for those older consumers. Contract retirement requires an explicit migration decision; generated files cannot silently remove an interface still in use.
 
 ### Why JWT with JWKS, and no API gateway service?
 Core-backend owns identity and signs tokens with a private key. Other services verify them with the public key published at its JWKS endpoint, so they never read its database (NFR-004, NFR-050). Validators and simulators authenticate with service credentials (NFR-053). Traefik routes by path and terminates TLS (NFR-052). A custom gateway would be one more component to build and one more point of failure.
@@ -132,15 +138,17 @@ Core-backend owns identity and signs tokens with a private key. Other services v
 No requirement needs one. Idempotency and deduplication live in PostgreSQL, and stale-tolerant consultation is handled by the browser cache. Every extra stateful component is another failure mode to test.
 
 ### Why Docker Swarm for dev and prod?
-The statement requires containerisation, version-controlled deployment, a deployment strategy and rollback (NFR-096 to NFR-100), on infrastructure the team provisions itself. Swarm stack files use Compose syntax, so local and deployed definitions stay close. Swarm also provides health-check-gated rolling updates with automatic rollback, and native secrets (NFR-054). It is cheap to operate on one or two VMs within the project timeline. The trade-off is a smaller ecosystem than Kubernetes and manual replica scaling (NFR-044 is only a "Could").
+The statement requires containerisation, version-controlled deployment, a deployment strategy and rollback (NFR-096 to NFR-100), on infrastructure the team provisions itself. Swarm stack files use Compose syntax, so local and deployed definitions stay close. Swarm supports rolling updates, configurable automatic rollback and native secrets (NFR-054). Separate single-node dev and prod Swarms keep operation manageable within the project timeline. The trade-offs are a smaller ecosystem than Kubernetes, manual replica scaling (NFR-044 is only a "Could") and no production host-failure resilience.
 
 ### Why a rolling deployment?
-The stateless services (web, the API and worker of each backend) run with at least two replicas in production and are replaced one at a time, starting the new task before stopping the old one. A failed health check triggers automatic rollback (NFR-073, NFR-100). Stateful services (databases, broker) are never rolled automatically. Database migrations follow expand/contract, so the old and new versions work against the same schema during a rollout.
+The web and backend APIs run with at least two replicas in production. Relay, consumer and sender roles scale independently; multiple replicas require verified concurrent processing for that role. Stateless services are updated one task at a time with `parallelism: 1`, `order: start-first` and `failure_action: rollback`. Each deployment defines health checks, startup allowances, an update monitoring window and rollback settings; startup time and failure detection determine the window (NFR-073, NFR-100). Readiness-aware ingress routing and deployment smoke checks must verify service usability: task startup alone is not readiness. Failures outside the monitoring window require alerting and a pipeline rollback decision.
+
+Stateful services (databases, broker) are never rolled automatically. Database migrations follow expand/contract, so old and new application versions work against the same schema during rollout and rollback; application rollback does not automatically undo a migration. Multiple application replicas on one VM reduce process and rollout downtime but do not tolerate loss of that VM. Host or persistent-storage failure requires the documented restore procedure and may cause downtime or loss since the last backup; recovery objectives remain to be approved.
 
 ## Delivery and Infrastructure
 
 - **Source control and CI/CD:** GitHub (where the team's repository lives) and GitHub Actions. A self-hosted runner runs on the development VM and executes the integration and system tests (NFR-095)
-- **Images:** one per component (API and worker share a backend's image), tagged with the git SHA (and a release version), pushed to GitHub Container Registry. The same image is promoted from dev to prod, never rebuilt (NFR-091, NFR-094)
+- **Images:** one per component (API, relay, consumer and sender roles share their backend's image), tagged with the git SHA (and a release version), pushed to GitHub Container Registry. The same image is promoted from dev to prod, never rebuilt (NFR-091, NFR-094)
 - **Environments:** `dev` and `prod` on separate VMs, each its own Swarm. Production deployment waits for a protected-environment approval after dev system tests and smoke checks pass (NFR-093)
 - **Provisioning:** Ansible playbooks for Docker, Swarm, firewall and runner, so environments are rebuilt from the repository (NFR-097)
 - **Configuration:** environment variables validated at startup with pydantic-settings. Secrets are Swarm secrets, read from `*_FILE` paths. Only `.env.example` is committed (NFR-054, NFR-099)
@@ -168,9 +176,11 @@ The stateless services (web, the API and worker of each backend) run with at lea
 
 **Why:** each tool maps to a requirement: NFR-080 to NFR-086 for the test levels, NFR-025 and NFR-085 for failure scenarios, NFR-055 for security testing, NFR-084 for static analysis on every change. Testcontainers means integration tests run against real PostgreSQL and RabbitMQ, not mocks, which is what NFR-081 asks for. Using Python for backend and system tests keeps the whole test suite in one language.
 
+**Adoption order:** establish formatting, linting, type checks, unit tests and secret scanning with the first implementation. Add real-dependency integration and contract checks when the first service interaction is introduced, and system smoke checks when the dev stack is deployable. Add failure, accessibility, performance, security and mutation checks as their relevant features become testable, before claiming their requirements are satisfied. Fast checks run on each pull request; longer checks run in feature acceptance and release pipelines, or earlier when a requirement demands it. Staging tool setup does not defer a required acceptance check.
+
 ## Observability
 
-- **Logs:** structured JSON with a `correlationId` created at the first service (Django middleware) and passed on in HTTP headers and in the event envelope (NFR-070)
+- **Logs:** structured JSON with `correlation_id`. Django middleware creates the id if absent; HTTP uses `X-Correlation-Id` and event envelopes use `correlationId`, carrying the same value across boundaries (NFR-070)
 - **Metrics:** Prometheus scrapes every service and the RabbitMQ endpoint, covering request rate, errors, latency and queue depth (NFR-071)
 - **Dashboards and alerts:** Grafana and Alertmanager, with an alert for the failure of any single component (NFR-072)
 - **Log aggregation:** Loki with Grafana Alloy
