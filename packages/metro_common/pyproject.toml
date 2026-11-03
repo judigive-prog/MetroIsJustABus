@@ -1,0 +1,12 @@
+[project]
+name = "metro-common"
+version = "0.1.0"
+description = "Event contracts and correlation helpers shared by MetroIsJustABus services. No domain logic, no database access."
+requires-python = ">=3.13"
+dependencies = [
+  "pydantic>=2.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
