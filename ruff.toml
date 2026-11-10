@@ -1,7 +1,7 @@
 # Ruff runs from the repo root in CI, so tell it where each service's own modules live.
 # metro_common is deliberately NOT listed: it is an installed dependency, and the
 # existing code already groups it with third-party imports.
-src = ["apps/ticketing-service", "simulators/payment-sim"]
+src = ["apps/notification-service", "apps/ticketing-service", "simulators/payment-sim"]
 
 # The existing code uses lines up to ~120 characters.
 line-length = 120
