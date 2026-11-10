@@ -1,0 +1,163 @@
+name: CI
+
+# SECURITY: this workflow deliberately uses `pull_request` (NOT `pull_request_target`
+# or `workflow_run`). PRs from forks therefore run with a read-only token and no
+# secrets, so untrusted PR code can never run in a privileged context (pwn request).
+# Do not add secrets, package/deploy permissions or self-hosted runners to PR jobs.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Least privilege for every job. A job that needs more must declare it itself.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  lint:
+    name: Lint and format (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+      - name: Ruff lint
+        run: uvx ruff check .
+      - name: Ruff format check
+        run: uvx ruff format --check .
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # read-only token under `permissions` above
+
+  test-metro-common:
+    name: Tests (metro_common)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run pytest
+        working-directory: packages/metro_common
+        run: uv run --with pytest pytest -m "not integration and not system" || [ $? -eq 5 ]
+        # `|| [ $? -eq 5 ]` tolerates "no tests collected" while the repo has no tests yet.
+        # Remove it once tests exist.
+
+  test-payment-sim:
+    name: Tests (payment-sim)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Create throw-away test secrets
+        run: |
+          mkdir -p "$RUNNER_TEMP/secrets"
+          echo "ci-only-not-a-secret-key" > "$RUNNER_TEMP/secrets/secret_key"
+          echo "ci-only-service-token" > "$RUNNER_TEMP/secrets/service_token"
+      - name: Run pytest
+        working-directory: simulators/payment-sim
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          SECRET_KEY_FILE: ${{ runner.temp }}/secrets/secret_key
+          SERVICE_TOKEN_FILE: ${{ runner.temp }}/secrets/service_token
+          SIM_DB_PATH: ${{ runner.temp }}/payment_sim.sqlite3
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+        run: uv run --with pytest --with pytest-django --with coverage pytest -m "not system" || [ $? -eq 5 ]
+
+  test-ticketing:
+    name: Tests (ticketing-service)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: ticketing
+          POSTGRES_USER: ticketing
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ticketing"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Create throw-away test secrets
+        run: |
+          d="$RUNNER_TEMP/secrets"
+          mkdir -p "$d"
+          echo "ci-only-not-a-secret-key" > "$d/secret_key"
+          echo "ci-only-password" > "$d/db_password"
+          echo "ci-only-service-token" > "$d/payment_sim_token"
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$d/jwt_private.pem"
+          openssl pkey -in "$d/jwt_private.pem" -pubout -out "$d/jwt_public.pem"
+      - name: Run pytest
+        working-directory: apps/ticketing-service
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          SECRET_KEY_FILE: ${{ runner.temp }}/secrets/secret_key
+          ALLOWED_HOSTS: '["localhost","testserver"]'
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: ticketing
+          POSTGRES_USER: ticketing
+          POSTGRES_PASSWORD_FILE: ${{ runner.temp }}/secrets/db_password
+          JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/secrets/jwt_public.pem
+          PAYMENT_SIM_URL: http://localhost:8001
+          PAYMENT_SIM_TOKEN_FILE: ${{ runner.temp }}/secrets/payment_sim_token
+        run: uv run --with pytest --with pytest-django --with coverage pytest -m "not system" || [ $? -eq 5 ]
+
+  # ---------------------------------------------------------------------------
+  # Integration / system tests on the self-hosted runner (dev VM), NFR-095.
+  # NEVER run this on pull requests: a PR could execute arbitrary code on the VM.
+  # It runs only after a merge to main, i.e. after a code-owner-approved review.
+  # Uncomment when integration tests exist.
+  #
+  # integration-dev:
+  #   name: Integration and system tests (dev VM)
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   needs: [lint, secret-scan, test-metro-common, test-payment-sim, test-ticketing]
+  #   runs-on: [self-hosted, dev]
+  #   environment: dev        # protected environment: add required reviewers in repo settings
+  #   timeout-minutes: 30
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         persist-credentials: false
+  #     - run: echo "run integration/system tests here"
+  # ---------------------------------------------------------------------------

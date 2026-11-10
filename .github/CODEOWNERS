@@ -1,0 +1,27 @@
+# Everyone on the team does a bit of everything, so every owner is listed on
+# every path. Combined with branch protection ("Require review from Code Owners"),
+# any change needs approval from one owner who is NOT the PR author.
+# The last matching pattern wins, so keep the specific rules below the catch-all.
+
+# Default: the whole repository
+*                                   @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+
+# Security-sensitive: CI/CD, ownership rules, and anything that can run code on our runner
+/.github/workflows/                 @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/.github/CODEOWNERS                 @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/.github/actions/                   @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/**/Dockerfile*                     @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/deploy/                            @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+
+# Contracts and data (breaking changes affect other components)
+/contracts/                         @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+**/migrations/                      @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/packages/metro_common/             @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+
+# Services
+/apps/ticketing-service/            @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/simulators/payment-sim/            @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+
+# Specs, steering docs and agent instructions
+/.ai/                               @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
+/AGENTS.md                          @judigive-prog @Lostirsan @alexwfaustino @jpx2026 @Eevuskha
