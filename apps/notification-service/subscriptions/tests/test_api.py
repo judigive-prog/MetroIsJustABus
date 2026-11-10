@@ -199,3 +199,79 @@ def test_passenger_can_update_and_cancel_subscription(
     assert reactivate_resp.json()["active"] is True
     sub.refresh_from_db()
     assert sub.active is True
+
+
+@pytest.mark.django_db
+@pytest.mark.req("FR-061")
+def test_filter_subscriptions_by_active_status(
+    passenger_client: Callable[[uuid.UUID], APIClient],
+) -> None:
+    passenger_id = uuid.uuid4()
+    client = passenger_client(passenger_id)
+
+    # Create 2 subscriptions
+    r1 = client.post(
+        "/api/notifications/v1/subscriptions",
+        {"entityType": "LINE", "entityId": "L-YELLOW"},
+        format="json",
+    )
+    r2 = client.post(
+        "/api/notifications/v1/subscriptions",
+        {"entityType": "STOP", "entityId": "S-BAIXA"},
+        format="json",
+    )
+    sub2_id = r2.json()["id"]
+
+    # Cancel sub2
+    client.delete(f"/api/notifications/v1/subscriptions/{sub2_id}")
+
+    # Query all
+    all_resp = client.get("/api/notifications/v1/subscriptions")
+    assert len(all_resp.json()["items"]) == 2
+
+    # Query active=true
+    active_resp = client.get("/api/notifications/v1/subscriptions?active=true")
+    assert len(active_resp.json()["items"]) == 1
+    assert active_resp.json()["items"][0]["id"] == r1.json()["id"]
+
+    # Query active=false
+    inactive_resp = client.get("/api/notifications/v1/subscriptions?active=false")
+    assert len(inactive_resp.json()["items"]) == 1
+    assert inactive_resp.json()["items"][0]["id"] == sub2_id
+
+
+@pytest.mark.django_db
+@pytest.mark.req("FR-061", "FR-065")
+def test_cancelled_subscription_excluded_from_matching(
+    passenger_client: Callable[[uuid.UUID], APIClient],
+) -> None:
+    from subscriptions.selectors import find_active_subscriptions_for_entities
+
+    passenger_id = uuid.uuid4()
+    client = passenger_client(passenger_id)
+
+    # Subscribe to Line and Stop
+    client.post(
+        "/api/notifications/v1/subscriptions",
+        {"entityType": "LINE", "entityId": "L-BLUE"},
+        format="json",
+    )
+    stop_resp = client.post(
+        "/api/notifications/v1/subscriptions",
+        {"entityType": "STOP", "entityId": "S-ALAMEDA"},
+        format="json",
+    )
+    stop_sub_id = stop_resp.json()["id"]
+
+    # Both are active and match
+    matches = find_active_subscriptions_for_entities([("LINE", "L-BLUE"), ("STOP", "S-ALAMEDA")])
+    assert matches.filter(passenger_id=passenger_id).count() == 2
+
+    # Cancel Stop subscription
+    client.delete(f"/api/notifications/v1/subscriptions/{stop_sub_id}")
+
+    # Now only Line matches, Stop no longer matches
+    matches_after = find_active_subscriptions_for_entities([("LINE", "L-BLUE"), ("STOP", "S-ALAMEDA")])
+    matched_subs = list(matches_after.filter(passenger_id=passenger_id))
+    assert len(matched_subs) == 1
+    assert matched_subs[0].entity_type == "LINE"

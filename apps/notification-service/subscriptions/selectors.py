@@ -10,10 +10,10 @@ def get_subscription(subscription_id: uuid.UUID, passenger_id: uuid.UUID) -> Sub
     return Subscription.objects.filter(id=subscription_id, passenger_id=passenger_id).first()
 
 
-def list_subscriptions(passenger_id: uuid.UUID, active_only: bool = False) -> QuerySet[Subscription]:
+def list_subscriptions(passenger_id: uuid.UUID, active: bool | None = None) -> QuerySet[Subscription]:
     qs = Subscription.objects.filter(passenger_id=passenger_id)
-    if active_only:
-        qs = qs.filter(active=True)
+    if active is not None:
+        qs = qs.filter(active=active)
     return qs.order_by("-created_at")
 
 

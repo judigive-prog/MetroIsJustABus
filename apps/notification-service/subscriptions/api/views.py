@@ -1,6 +1,7 @@
 import uuid
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -42,13 +43,26 @@ class SubscriptionsView(APIView):
 
     @extend_schema(
         summary="List passenger subscriptions (FR-061)",
+        parameters=[
+            OpenApiParameter(
+                name="active",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Filter by active status (true/false)",
+            )
+        ],
         responses={
             200: SubscriptionListResponseSerializer,
             401: ErrorResponseSerializer,
         },
     )
     def get(self, request: Request) -> Response:
-        subscriptions = selectors.list_subscriptions(passenger_id=request.user.id)
+        active_param = request.query_params.get("active")
+        active_filter: bool | None = None
+        if active_param is not None:
+            active_filter = active_param.lower() in ("true", "1")
+        subscriptions = selectors.list_subscriptions(passenger_id=request.user.id, active=active_filter)
         return Response({"items": SubscriptionResponseSerializer(subscriptions, many=True).data})
 
 
