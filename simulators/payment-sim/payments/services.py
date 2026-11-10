@@ -53,9 +53,7 @@ def process_payment(*, key: uuid.UUID, amount_cents: int, currency: str, token: 
     return response
 
 
-def _process(
-    *, key: uuid.UUID, fp: str, amount_cents: int, currency: str, token: str
-) -> tuple[SimResponse, bool]:
+def _process(*, key: uuid.UUID, fp: str, amount_cents: int, currency: str, token: str) -> tuple[SimResponse, bool]:
     with transaction.atomic():
         payment = Payment.objects.select_for_update().filter(idempotency_key=key).first()
         if payment is not None:
