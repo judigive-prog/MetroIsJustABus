@@ -61,6 +61,4 @@ def exception_handler(exc: Exception, context: dict[str, Any]) -> Response:
         )
 
     logger.exception("unexpected_failure")
-    return Response(
-        error_body("INTERNAL_ERROR", "Something went wrong. Please try again later."), status=500
-    )
+    return Response(error_body("INTERNAL_ERROR", "Something went wrong. Please try again later."), status=500)
