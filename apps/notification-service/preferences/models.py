@@ -9,6 +9,15 @@ class NotificationChannel(models.TextChoices):
     EMAIL = "EMAIL", _("Sandboxed Email")
 
 
+class ChangeType(models.TextChoices):
+    DISRUPTION = "DISRUPTION", _("Line or Stop Disruption")
+    DELAY = "DELAY", _("Trip Delay")
+    SCHEDULE_CHANGE = "SCHEDULE_CHANGE", _("Schedule Revision")
+
+
+DEFAULT_CHANGE_TYPES = [ChangeType.DISRUPTION.value, ChangeType.DELAY.value, ChangeType.SCHEDULE_CHANGE.value]
+
+
 class NotificationPreference(BaseModel):
     """Passenger notification preference per channel and change type (FR-062, ADR A-06)."""
 
