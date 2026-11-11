@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
-from rest_framework.views import APIView
+
+if TYPE_CHECKING:
+    from rest_framework.views import APIView
 
 PASSENGER = "passenger"
 

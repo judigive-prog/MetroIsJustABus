@@ -1,0 +1,458 @@
+{
+  "components": {
+    "schemas": {
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "correlationId",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "PaginatedTicketTypeResponseList": {
+        "properties": {
+          "next": {
+            "example": "http://api.example.org/accounts/?cursor=cD00ODY%3D\"",
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "previous": {
+            "example": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3",
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TicketTypeResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "PurchaseCreateRequest": {
+        "properties": {
+          "expectedPriceCents": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paymentMethodToken": {
+            "pattern": "^[A-Za-z0-9_]{1,64}$",
+            "type": "string"
+          },
+          "ticketTypeId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedPriceCents",
+          "paymentMethodToken",
+          "ticketTypeId"
+        ],
+        "type": "object"
+      },
+      "PurchaseResponse": {
+        "properties": {
+          "completedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "failureCode": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "priceCents": {
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusEnum"
+          },
+          "ticketId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ticketTypeId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "createdAt",
+          "currency",
+          "id",
+          "priceCents",
+          "status",
+          "ticketTypeId"
+        ],
+        "type": "object"
+      },
+      "StatusEnum": {
+        "description": "* `PENDING` - PENDING\n* `COMPLETED` - COMPLETED\n* `FAILED` - FAILED",
+        "enum": [
+          "PENDING",
+          "COMPLETED",
+          "FAILED"
+        ],
+        "type": "string"
+      },
+      "TicketTypeResponse": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "priceCents": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "currency",
+          "description",
+          "id",
+          "name",
+          "priceCents"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "MetroIsJustABus ticketing API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/ticketing/v1/purchases": {
+      "post": {
+        "operationId": "purchases_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Buy one ticket (FR-032, FR-033)",
+        "tags": [
+          "purchases"
+        ]
+      }
+    },
+    "/api/ticketing/v1/purchases/{purchase_id}": {
+      "get": {
+        "operationId": "purchases_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "purchase_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Status of one of my purchases (FR-036)",
+        "tags": [
+          "purchases"
+        ]
+      }
+    },
+    "/api/ticketing/v1/schema": {
+      "get": {
+        "description": "OpenApi3 schema for this API. Format can be selected via content negotiation.\n\n- YAML: application/vnd.oai.openapi\n- JSON: application/vnd.oai.openapi+json",
+        "operationId": "schema_retrieve",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "yaml"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              },
+              "application/vnd.oai.openapi": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              },
+              "application/vnd.oai.openapi+json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              },
+              "application/yaml": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {}
+        ],
+        "tags": [
+          "schema"
+        ]
+      }
+    },
+    "/api/ticketing/v1/ticket-types": {
+      "get": {
+        "operationId": "ticket_types_list",
+        "parameters": [
+          {
+            "description": "The pagination cursor value.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of results to return per page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedTicketTypeResponseList"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "List ticket types that can be bought (FR-031)",
+        "tags": [
+          "ticket-types"
+        ]
+      }
+    }
+  }
+}

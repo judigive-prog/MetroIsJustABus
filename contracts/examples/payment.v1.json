@@ -1,0 +1,23 @@
+{
+  "contract": "openapi/payment-sim.v1.json",
+  "contractVersion": "1.0.0",
+  "request": {
+    "method": "POST",
+    "path": "/api/payment-sim/v1/payments",
+    "headers": {
+      "Idempotency-Key": "20000000-0000-4000-8000-000000000001"
+    },
+    "body": {
+      "amountCents": 250,
+      "currency": "EUR",
+      "paymentMethodToken": "sim_approve"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "paymentId": "60000000-0000-4000-8000-000000000001",
+      "status": "APPROVED"
+    }
+  }
+}

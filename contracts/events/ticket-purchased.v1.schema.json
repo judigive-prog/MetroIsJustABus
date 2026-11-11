@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "TicketPurchasedV1": {
+      "properties": {
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "issuedAt": {
+          "format": "date-time",
+          "title": "Issuedat",
+          "type": "string"
+        },
+        "passengerId": {
+          "format": "uuid",
+          "title": "Passengerid",
+          "type": "string"
+        },
+        "priceCents": {
+          "title": "Pricecents",
+          "type": "integer"
+        },
+        "purchaseId": {
+          "format": "uuid",
+          "title": "Purchaseid",
+          "type": "string"
+        },
+        "ticketId": {
+          "format": "uuid",
+          "title": "Ticketid",
+          "type": "string"
+        },
+        "ticketTypeId": {
+          "format": "uuid",
+          "title": "Tickettypeid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "purchaseId",
+        "ticketId",
+        "passengerId",
+        "ticketTypeId",
+        "priceCents",
+        "currency",
+        "issuedAt"
+      ],
+      "title": "TicketPurchasedV1",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "TicketPurchased v1 activity event. Deduplicate by eventId; this is not an entity-state snapshot. Additional fields are tolerated.",
+  "properties": {
+    "correlationId": {
+      "title": "Correlationid",
+      "type": "string"
+    },
+    "eventId": {
+      "format": "uuid",
+      "title": "Eventid",
+      "type": "string"
+    },
+    "occurredAt": {
+      "format": "date-time",
+      "title": "Occurredat",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/TicketPurchasedV1"
+    },
+    "producer": {
+      "const": "ticketing-service",
+      "title": "Producer",
+      "type": "string"
+    },
+    "type": {
+      "const": "TicketPurchased",
+      "title": "Type",
+      "type": "string"
+    },
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "eventId",
+    "type",
+    "version",
+    "producer",
+    "occurredAt",
+    "correlationId",
+    "payload"
+  ],
+  "title": "TicketPurchasedEventV1",
+  "type": "object",
+  "x-routing-key": "ticketing.ticket.purchased"
+}
