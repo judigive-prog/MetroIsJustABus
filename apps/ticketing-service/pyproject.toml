@@ -16,6 +16,9 @@ dependencies = [
   "metro-common",
 ]
 
+[dependency-groups]
+contracts = ["jsonschema[format]>=4.23,<5"]
+
 [tool.uv]
 package = false
 
