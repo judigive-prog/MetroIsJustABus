@@ -24,9 +24,7 @@ class ServiceHttpClient:
             transport=transport,
         )
 
-    def post_json(
-        self, path: str, *, json: dict[str, Any], headers: dict[str, str] | None = None
-    ) -> httpx.Response:
+    def post_json(self, path: str, *, json: dict[str, Any], headers: dict[str, str] | None = None) -> httpx.Response:
         """One attempt, no retries. Raises `httpx.HTTPError` on timeouts and connection errors."""
         request_headers = {"Authorization": f"Bearer {self._service_token}", **(headers or {})}
         correlation_id = get_correlation_id()
