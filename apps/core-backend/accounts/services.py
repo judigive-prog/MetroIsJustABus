@@ -1,7 +1,8 @@
 """Account credential and password hashing services (NFR-051)."""
 
 import structlog
-from django.contrib.auth.hashers import check_password, get_hasher, make_password
+from argon2.exceptions import InvalidHashError
+from django.contrib.auth.hashers import check_password, get_hasher, identify_hasher, make_password
 from django.db import IntegrityError, transaction
 
 from accounts.exceptions import DuplicateAccountError, InvalidPasswordError
@@ -25,17 +26,26 @@ def hash_password(raw_password: str) -> str:
 
 def verify_password(raw_password: str, encoded_hash: str) -> bool:
     """Verify a raw password against a stored salted hash (NFR-051)."""
-    if not raw_password or not encoded_hash:
+    if not raw_password or not encoded_hash or not encoded_hash.startswith(_ARGON2ID_PREFIX):
         return False
     return check_password(raw_password, encoded_hash)
 
 
 def password_needs_rehash(encoded_hash: str) -> bool:
     """Return True if an existing stored hash does not match current Argon2id parameters."""
-    if not encoded_hash:
+    if not encoded_hash or not encoded_hash.startswith(_ARGON2ID_PREFIX):
         return True
-    hasher = get_hasher()
-    return hasher.must_update(encoded_hash)
+    preferred = get_hasher()
+    try:
+        current = identify_hasher(encoded_hash)
+    except ValueError:
+        return True
+    if type(current) is not type(preferred):
+        return True
+    try:
+        return preferred.must_update(encoded_hash)
+    except (InvalidHashError, ValueError):
+        return True
 
 
 def create_user_credentials(

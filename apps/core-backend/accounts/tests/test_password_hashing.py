@@ -1,3 +1,4 @@
+import base64
 from datetime import UTC, datetime
 
 import pytest
@@ -10,6 +11,10 @@ from accounts.exceptions import InvalidPasswordError
 from accounts.hashers import CoreArgon2PasswordHasher
 from accounts.models import AccountProfile, RoleAssignment, User
 from accounts.services import create_user_credentials, hash_password, password_needs_rehash, verify_password
+
+_WEAK_SALT = base64.b64encode(b"0" * 16).decode("ascii").rstrip("=")
+_WEAK_DIGEST = base64.b64encode(b"1" * 32).decode("ascii").rstrip("=")
+_WEAK_ARGON2ID_HASH = f"argon2$argon2id$v=19$m=4096,t=1,p=1${_WEAK_SALT}${_WEAK_DIGEST}"
 
 
 class _FixedClock:
@@ -61,6 +66,23 @@ def test_hash_password_produces_salted_argon2id_with_unique_salts() -> None:
 def test_hash_password_rejects_empty_passwords(raw: str) -> None:
     with pytest.raises(InvalidPasswordError):
         hash_password(raw)
+
+
+@pytest.mark.unit
+@pytest.mark.req("NFR-051")
+@pytest.mark.parametrize(
+    "encoded_hash",
+    [
+        "",
+        "plaintext-password",
+        "pbkdf2_sha256$870000$salt$hash",
+        "argon2$argon2i$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0$aGFzaA",
+        "argon2$argon2id$corrupt",
+        _WEAK_ARGON2ID_HASH,
+    ],
+)
+def test_password_needs_rehash_flags_weak_or_non_argon2id_hashes(encoded_hash: str) -> None:
+    assert password_needs_rehash(encoded_hash) is True
 
 
 @pytest.mark.django_db
