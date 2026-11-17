@@ -1,5 +1,33 @@
 name: CI
 
+# =============================================================================
+# PIPELINE OVERVIEW (read this first)
+#
+#   WHEN:   on every pull request to main, and on every push (merge) to main.
+#   FLOW:   (1) checks, in parallel ........ lint, contracts, secret-scan, test-*
+#           (2) build-images ............... only if ALL checks pass; builds the
+#                                            3 Docker images, tags them with the
+#                                            git commit SHA, pushes them to GHCR
+#                                            (push only happens on main)
+#           (3) deploy-dev ................. only on main; runs on our dev VM and
+#                                            deploys the SHA-tagged images
+#
+#   WHERE (what is done where):
+#     Code style / lint ............ job `lint`
+#     API + event contract checks .. job `contracts`
+#     Secret scan (safety) ......... job `secret-scan`
+#     Automated tests .............. jobs `test-metro-common`, `test-payment-sim`,
+#                                    `test-ticketing`, `test-notification`
+#     Docker build / versioned image job `build-images`   (Dockerfiles live next
+#                                    to each service; tag = commit SHA)
+#     Deployment to development .... job `deploy-dev`     (stack file:
+#                                    deploy/stack/dev.yml)
+#     Integration / system tests ... commented-out job at the bottom (not active)
+#
+#   NOT YET DONE (be honest in the demo): coverage threshold, dependency/image
+#   vulnerability scan, automatic post-deploy smoke test, production deployment.
+# =============================================================================
+
 # SECURITY: this workflow deliberately uses `pull_request` (NOT `pull_request_target`
 # or `workflow_run`). PRs from forks therefore run with a read-only token and no
 # secrets, so untrusted PR code can never run in a privileged context (pwn request).
@@ -14,6 +42,8 @@ on:
 permissions:
   contents: read
 
+# If a new commit is pushed to the same PR, cancel the older run (saves time).
+# Runs on main are never cancelled, so every merge is fully built and deployed.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -22,6 +52,10 @@ env:
   PYTHON_VERSION: "3.13"
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # QUALITY CHECK 1 - code style and common bugs (ruff). Config: /ruff.toml.
+  # Fails the pipeline if any file is badly formatted or has a lint error.
+  # ---------------------------------------------------------------------------
   lint:
     name: Lint and format (ruff)
     runs-on: ubuntu-latest
@@ -36,6 +70,11 @@ jobs:
       - name: Ruff format check
         run: uvx ruff format --check .
 
+  # ---------------------------------------------------------------------------
+  # QUALITY CHECK 2 - interface contracts (NFR-006). The OpenAPI / AsyncAPI /
+  # JSON-schema files in /contracts must match the code ("drift" check) and the
+  # example messages must validate. A breaking API change fails here.
+  # ---------------------------------------------------------------------------
   contracts:
     name: Versioned interface contracts (NFR-006)
     runs-on: ubuntu-latest
@@ -67,6 +106,10 @@ jobs:
         # AsyncAPI validation downloads a pinned official meta-schema over HTTPS.
         # These checks need no broker, database, credentials or self-hosted runner.
 
+  # ---------------------------------------------------------------------------
+  # SAFETY CHECK - gitleaks scans the whole git history (fetch-depth: 0) for
+  # accidentally committed passwords, tokens and keys.
+  # ---------------------------------------------------------------------------
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -80,6 +123,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # read-only token under `permissions` above
 
+  # ---------------------------------------------------------------------------
+  # AUTOMATED TESTS - one job per component, so a failure points at the culprit.
+  # Test files live in each component's `tests/` folders.
+  # NOTE: metro_common currently has 0 tests (see the exit-code-5 tolerance below).
+  # ---------------------------------------------------------------------------
   test-metro-common:
     name: Tests (metro_common)
     runs-on: ubuntu-latest
@@ -97,6 +145,8 @@ jobs:
         # `|| [ $? -eq 5 ]` tolerates "no tests collected" while the repo has no tests yet.
         # Remove it once tests exist.
 
+  # payment-sim: the payment simulator (SQLite). Secrets are throw-away files
+  # created on the runner, never real credentials.
   test-payment-sim:
     name: Tests (payment-sim)
     runs-on: ubuntu-latest
@@ -124,6 +174,8 @@ jobs:
         # The simulator's first application migration is pending. Build its test schema from the models.
         run: uv run --locked --with pytest --with pytest-django pytest --no-migrations -m "not system"
 
+  # ticketing-service: tests run against a REAL PostgreSQL 17 container (the
+  # `services:` block below), not a mock, so database behaviour is tested too.
   test-ticketing:
     name: Tests (ticketing-service)
     runs-on: ubuntu-latest
@@ -175,6 +227,7 @@ jobs:
         # The ticketing apps have no application migrations yet. The tests still use PostgreSQL.
         run: uv run --locked --group contracts --with pytest --with pytest-django pytest --no-migrations -m "not system"
 
+  # notification-service: uses its own test settings (config/test_settings.py).
   test-notification:
     name: Tests (notification-service)
     runs-on: ubuntu-latest
@@ -190,6 +243,15 @@ jobs:
         working-directory: apps/notification-service
         run: uv run --group dev pytest -m "not integration and not system"
 
+  # ---------------------------------------------------------------------------
+  # CONTAINERISATION + VERSIONED ARTEFACT.
+  # `needs:` = this job waits for every check above; if any is red, no image.
+  # The `matrix` runs this job once per service (3 builds in parallel).
+  # On a PR the image is only BUILT (proves the Dockerfile works).
+  # On a push to main it is also PUSHED to GHCR as
+  #   ghcr.io/<owner>/<repo>/<service>:<git commit SHA>
+  # The SHA tag is the version: it links commit -> image -> deployed stack.
+  # ---------------------------------------------------------------------------
   build-images:
     name: Build image (${{ matrix.name }})
     needs: [lint, contracts, secret-scan, test-metro-common, test-payment-sim, test-ticketing, test-notification]
@@ -227,6 +289,15 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ghcr.io/${{ env.REPO }}/${{ matrix.name }}:${{ github.sha }}
 
+  # ---------------------------------------------------------------------------
+  # AUTOMATIC DEPLOYMENT TO DEVELOPMENT.
+  # Runs ONLY after a merge to main (never on PRs, see `if:`), and only after
+  # the images were pushed (`needs: build-images`).
+  # `runs-on: [self-hosted, dev]` = the runner installed on our dev VM
+  # (Ubuntu 24.04). `docker stack deploy` updates the Docker Swarm stack defined
+  # in deploy/stack/dev.yml to the images tagged with this commit's SHA.
+  # Docker secrets (passwords, keys) already live on the VM; none are in git.
+  # ---------------------------------------------------------------------------
   deploy-dev:
     name: Deploy to dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
