@@ -36,6 +36,37 @@ jobs:
       - name: Ruff format check
         run: uvx ruff format --check .
 
+  contracts:
+    name: Versioned interface contracts (NFR-006)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Prepare isolated contract environments
+        run: |
+          uv sync --locked --project packages/metro_common --group contracts
+          uv sync --locked --project apps/ticketing-service --group contracts
+          uv sync --locked --project simulators/payment-sim
+      - name: Check generated contracts for drift
+        run: |
+          uv run --locked --project packages/metro_common python contracts/generate_events.py --check
+          uv run --locked --project packages/metro_common python contracts/generate_events.py --asyncapi --check
+          uv run --locked --project apps/ticketing-service python contracts/generate_openapi.py --check
+          uv run --locked --project simulators/payment-sim python contracts/generate_openapi.py --service payment-sim --check
+      - name: Validate examples and component boundaries
+        run: |
+          uv run --locked --project packages/metro_common --group contracts python contracts/validate_events.py
+          uv run --locked --project apps/ticketing-service --group contracts python contracts/check_payment_contract.py
+          uv run --locked --project apps/ticketing-service --group contracts python contracts/check_event_contract.py
+          uv run --locked --project packages/metro_common --group contracts python contracts/validate_asyncapi.py
+        # AsyncAPI validation downloads a pinned official meta-schema over HTTPS.
+        # These checks need no broker, database, credentials or self-hosted runner.
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest

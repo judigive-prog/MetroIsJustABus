@@ -1,0 +1,346 @@
+{
+  "components": {
+    "schemas": {
+      "FrameworkError": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "type": "object"
+      },
+      "PaymentBadRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PaymentError"
+          },
+          {
+            "$ref": "#/components/schemas/FrameworkError"
+          }
+        ]
+      },
+      "PaymentDecisionEnum": {
+        "description": "* `APPROVED` - APPROVED\n* `DECLINED` - DECLINED",
+        "enum": [
+          "APPROVED",
+          "DECLINED"
+        ],
+        "type": "string"
+      },
+      "PaymentError": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/PaymentErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "PaymentErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "PaymentInspection": {
+        "properties": {
+          "chargeCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paymentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requestCount": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentInspectionStatusEnum"
+          }
+        },
+        "required": [
+          "chargeCount",
+          "paymentId",
+          "requestCount",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PaymentInspectionStatusEnum": {
+        "description": "* `APPROVED` - APPROVED\n* `DECLINED` - DECLINED\n* `ERRORED` - ERRORED",
+        "enum": [
+          "APPROVED",
+          "DECLINED",
+          "ERRORED"
+        ],
+        "type": "string"
+      },
+      "PaymentRequest": {
+        "properties": {
+          "amountCents": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "paymentMethodToken": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "amountCents",
+          "currency",
+          "paymentMethodToken"
+        ],
+        "type": "object"
+      },
+      "PaymentResponse": {
+        "properties": {
+          "paymentId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentDecisionEnum"
+          }
+        },
+        "required": [
+          "paymentId",
+          "status"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "serviceBearer": {
+        "description": "Existing shared service token; not a passenger JWT. Credential issuance remains pending.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "MetroIsJustABus simulated payment API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/payment-sim/v1/payments": {
+      "post": {
+        "description": "Existing simulator behaviour only; no real payment is processed.",
+        "operationId": "root_create",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentBadRequest"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentError"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "serviceBearer": []
+          }
+        ],
+        "summary": "Create or replay a simulated payment"
+      }
+    },
+    "/api/payment-sim/v1/payments/{key}": {
+      "get": {
+        "operationId": "root_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentInspection"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FrameworkError"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "serviceBearer": []
+          }
+        ],
+        "summary": "Inspect a simulated payment by its idempotency key"
+      }
+    }
+  }
+}

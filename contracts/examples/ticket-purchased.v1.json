@@ -1,0 +1,17 @@
+{
+  "eventId": "10000000-0000-4000-8000-000000000001",
+  "type": "TicketPurchased",
+  "version": 1,
+  "producer": "ticketing-service",
+  "occurredAt": "2026-11-11T12:00:00Z",
+  "correlationId": "met-88-contract-example",
+  "payload": {
+    "purchaseId": "20000000-0000-4000-8000-000000000001",
+    "ticketId": "30000000-0000-4000-8000-000000000001",
+    "passengerId": "40000000-0000-4000-8000-000000000001",
+    "ticketTypeId": "50000000-0000-4000-8000-000000000001",
+    "priceCents": 250,
+    "currency": "EUR",
+    "issuedAt": "2026-11-11T12:00:00Z"
+  }
+}

@@ -12,6 +12,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "rest_framework",
+    "drf_spectacular",
     "payments",
 ]
 
@@ -39,6 +40,16 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "UNAUTHENTICATED_USER": None,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MetroIsJustABus simulated payment API",
+    "VERSION": "1.0.0",
+    "ENUM_NAME_OVERRIDES": {
+        "PaymentDecisionEnum": ["APPROVED", "DECLINED"],
+        "PaymentInspectionStatusEnum": ["APPROVED", "DECLINED", "ERRORED"],
+    },
 }
 
 structlog.configure(
