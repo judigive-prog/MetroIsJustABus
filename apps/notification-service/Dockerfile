@@ -30,7 +30,8 @@ USER appuser
 EXPOSE 8000
 
 ENV PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8000 \
+    PYTHONPATH=/app/packages/metro_common
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')" || exit 1

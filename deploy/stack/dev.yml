@@ -1,0 +1,145 @@
+# Docker Swarm stack for the dev environment (single node).
+# Deployed by the `deploy-dev` job in .github/workflows/ci.yml:
+#   REPO=<owner>/<repo, lowercase>  TAG=<git sha>  docker stack deploy -c deploy/stack/dev.yml metro
+# Secrets are external: create them once on the dev VM (see the list at the bottom).
+
+services:
+  ticketing-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ticketing
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD_FILE: /run/secrets/ticketing_db_password
+    secrets:
+      - ticketing_db_password
+    volumes:
+      - ticketing-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketing -d ticketing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  notification-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: notification
+      POSTGRES_USER: notification
+      POSTGRES_PASSWORD_FILE: /run/secrets/notification_db_password
+    secrets:
+      - notification_db_password
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification -d notification"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  payment-sim:
+    image: ghcr.io/${REPO}/payment-sim:${TAG}
+    environment:
+      SECRET_KEY_FILE: /run/secrets/payment_sim_secret_key
+      SERVICE_TOKEN_FILE: /run/secrets/payment_sim_service_token
+      SIM_DB_PATH: /data/payment_sim.sqlite3
+      ALLOWED_HOSTS: '["payment-sim","localhost"]'
+    secrets:
+      - payment_sim_secret_key
+      - payment_sim_service_token
+    volumes:
+      - payment-sim-data:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: stop-first # the SQLite file must never be opened by two tasks at once
+        failure_action: rollback
+        monitor: 30s
+
+  ticketing-service:
+    image: ghcr.io/${REPO}/ticketing-service:${TAG}
+    environment:
+      SECRET_KEY_FILE: /run/secrets/ticketing_secret_key
+      ALLOWED_HOSTS: '["ticketing-service","localhost"]'
+      POSTGRES_HOST: ticketing-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ticketing
+      POSTGRES_USER: ticketing
+      POSTGRES_PASSWORD_FILE: /run/secrets/ticketing_db_password
+      JWT_PUBLIC_KEY_FILE: /run/secrets/core_jwt_public_key
+      PAYMENT_SIM_URL: http://payment-sim:8000
+      PAYMENT_SIM_TOKEN_FILE: /run/secrets/payment_sim_service_token
+    secrets:
+      - ticketing_secret_key
+      - ticketing_db_password
+      - core_jwt_public_key
+      - payment_sim_service_token
+    ports:
+      - "8000:8000"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+
+  notification-service:
+    image: ghcr.io/${REPO}/notification-service:${TAG}
+    environment:
+      SECRET_KEY_FILE: /run/secrets/notification_secret_key
+      ALLOWED_HOSTS: '["notification-service","localhost"]'
+      POSTGRES_HOST: notification-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: notification
+      POSTGRES_USER: notification
+      POSTGRES_PASSWORD_FILE: /run/secrets/notification_db_password
+      JWT_PUBLIC_KEY_FILE: /run/secrets/core_jwt_public_key
+    secrets:
+      - notification_secret_key
+      - notification_db_password
+      - core_jwt_public_key
+    ports:
+      - "8002:8000"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+
+volumes:
+  ticketing-db-data:
+  notification-db-data:
+  payment-sim-data:
+
+# Create once on the dev VM (docker swarm init first):
+#   printf '%s' "<value>" | docker secret create <name> -
+# core_jwt_public_key: docker secret create core_jwt_public_key ./public.pem
+secrets:
+  ticketing_secret_key:
+    external: true
+  ticketing_db_password:
+    external: true
+  notification_secret_key:
+    external: true
+  notification_db_password:
+    external: true
+  payment_sim_secret_key:
+    external: true
+  payment_sim_service_token:
+    external: true
+  core_jwt_public_key:
+    external: true
