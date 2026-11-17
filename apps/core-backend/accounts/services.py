@@ -5,7 +5,7 @@ from argon2.exceptions import InvalidHashError
 from django.contrib.auth.hashers import check_password, get_hasher, identify_hasher, make_password
 from django.db import IntegrityError, transaction
 
-from accounts.exceptions import DuplicateAccountError, InvalidPasswordError
+from accounts.exceptions import DuplicateAccountError, InvalidAccountDataError, InvalidPasswordError
 from accounts.models import AccountProfile, RoleAssignment, User
 from common.clock import Clock, default_clock
 
@@ -53,11 +53,15 @@ def create_user_credentials(
     email: str,
     raw_password: str,
     full_name: str,
+    phone: str = "",
     role: str = RoleAssignment.Role.PASSENGER,
     clock: Clock = default_clock,
 ) -> User:
     """Persist a new user, profile and role assignment using salted Argon2id password storage (NFR-051)."""
     normalized_email = email.strip().lower()
+    normalized_name = full_name.strip()
+    if not normalized_email or not normalized_name:
+        raise InvalidAccountDataError()
     encoded_hash = hash_password(raw_password)
     now = clock.now()
 
@@ -70,8 +74,9 @@ def create_user_credentials(
             )
             AccountProfile.objects.create(
                 user=user,
-                full_name=full_name.strip(),
+                full_name=normalized_name,
                 contact_email=normalized_email,
+                phone=phone.strip(),
             )
             RoleAssignment.objects.create(
                 user=user,

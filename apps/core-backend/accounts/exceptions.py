@@ -7,6 +7,12 @@ class InvalidPasswordError(DomainError):
     message = "A non-empty password is required."
 
 
+class InvalidAccountDataError(DomainError):
+    code = "INVALID_ACCOUNT_DATA"
+    http_status = 400
+    message = "Valid email and non-empty full name are required."
+
+
 class DuplicateAccountError(DomainError):
     code = "ACCOUNT_ALREADY_EXISTS"
     http_status = 409
