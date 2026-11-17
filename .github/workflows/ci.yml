@@ -174,19 +174,19 @@ jobs:
         run: uv run --with pytest --with pytest-django --with coverage pytest -m "not system" || [ $? -eq 5 ]
 
     test-notification:
-    name: Tests (notification-service)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Run pytest
-        working-directory: apps/notification-service
-        run: uv run --group dev pytest -m "not integration and not system"
+      name: Tests (notification-service)
+      runs-on: ubuntu-latest
+      timeout-minutes: 15
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            persist-credentials: false
+        - uses: astral-sh/setup-uv@v5
+          with:
+            python-version: ${{ env.PYTHON_VERSION }}
+        - name: Run pytest
+          working-directory: apps/notification-service
+          run: uv run --group dev pytest -m "not integration and not system"
 
   build-images:
     name: Build image (${{ matrix.name }})
