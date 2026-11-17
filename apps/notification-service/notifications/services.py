@@ -118,7 +118,7 @@ def process_relevant_change(
         active_dispatchers.update(dispatchers)
 
     entities = expand_affected_entities(event, topology_resolver=topology_resolver)
-    active_subscriptions = find_active_subscriptions_for_entities(list(entities))
+    active_subscriptions = find_active_subscriptions_for_entities(list(entities), at_time=event.occurred_at)
     affected_passengers = set(active_subscriptions.values_list("passenger_id", flat=True))
 
     logger.info(
@@ -136,7 +136,12 @@ def process_relevant_change(
 
     for passenger_id in affected_passengers:
         for channel in (NotificationChannel.IN_APP, NotificationChannel.EMAIL):
-            if not is_channel_enabled_for_passenger(passenger_id, channel, event.change_type):
+            if not is_channel_enabled_for_passenger(
+                passenger_id,
+                channel,
+                event.change_type,
+                at_time=event.occurred_at,
+            ):
                 logger.debug(
                     "channel_skipped_by_preference",
                     passenger_id=str(passenger_id),
