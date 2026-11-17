@@ -121,7 +121,8 @@ jobs:
           SERVICE_TOKEN_FILE: ${{ runner.temp }}/secrets/service_token
           SIM_DB_PATH: ${{ runner.temp }}/payment_sim.sqlite3
           ALLOWED_HOSTS: '["localhost","testserver"]'
-        run: uv run --with pytest --with pytest-django --with coverage pytest -m "not system" || [ $? -eq 5 ]
+        # The simulator's first application migration is pending. Build its test schema from the models.
+        run: uv run --locked --with pytest --with pytest-django pytest --no-migrations -m "not system"
 
   test-ticketing:
     name: Tests (ticketing-service)
@@ -171,7 +172,8 @@ jobs:
           JWT_PUBLIC_KEY_FILE: ${{ runner.temp }}/secrets/jwt_public.pem
           PAYMENT_SIM_URL: http://localhost:8001
           PAYMENT_SIM_TOKEN_FILE: ${{ runner.temp }}/secrets/payment_sim_token
-        run: uv run --with pytest --with pytest-django --with coverage pytest -m "not system" || [ $? -eq 5 ]
+        # The ticketing apps have no application migrations yet. The tests still use PostgreSQL.
+        run: uv run --locked --group contracts --with pytest --with pytest-django pytest --no-migrations -m "not system"
 
   test-notification:
     name: Tests (notification-service)
