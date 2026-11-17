@@ -10,6 +10,7 @@ from inbox.services import create_inbox_notification
 from notifications.models import DeliveryStatus, NotificationRecord
 from preferences.models import NotificationChannel
 from preferences.selectors import is_channel_enabled_for_passenger
+from subscriptions.models import EntityType
 from subscriptions.selectors import find_active_subscriptions_for_entities
 
 logger = structlog.get_logger(__name__)
@@ -17,7 +18,7 @@ logger = structlog.get_logger(__name__)
 
 @dataclass(frozen=True)
 class RelevantChangeEvent:
-    """Represents an incoming domain event triggering notifications (FR-063, FR-064)."""
+    """Represents an incoming domain event triggering notifications (FR-063, FR-064, FR-065)."""
 
     event_id: uuid.UUID
     change_type: str
@@ -28,6 +29,39 @@ class RelevantChangeEvent:
     occurred_at: datetime.datetime | None = None
     correlation_id: str = ""
     related_entities: Sequence[tuple[str, str]] = field(default_factory=tuple)
+    line_id: str = ""
+    stop_ids: Sequence[str] = field(default_factory=tuple)
+
+
+def expand_affected_entities(
+    event: RelevantChangeEvent,
+    topology_resolver: Callable[[str, str], Sequence[tuple[str, str]]] | None = None,
+) -> set[tuple[str, str]]:
+    """Expand event entity according to hierarchy coverage rules (FR-065).
+
+    - Line subscriptions cover stops and trips on that line.
+    - Stop subscriptions cover trips serving that stop.
+    - Direct subscriptions cover the event entity directly.
+    - Overlapping matches are collapsed to distinct entities.
+    """
+    entities: set[tuple[str, str]] = {(event.entity_type, event.entity_id)}
+
+    if event.line_id:
+        entities.add((EntityType.LINE, event.line_id))
+
+    if event.stop_ids:
+        for stop_id in event.stop_ids:
+            entities.add((EntityType.STOP, stop_id))
+
+    if event.related_entities:
+        for entity in event.related_entities:
+            entities.add(entity)
+
+    if topology_resolver:
+        for entity in topology_resolver(event.entity_type, event.entity_id):
+            entities.add(entity)
+
+    return entities
 
 
 def default_in_app_dispatcher(event: RelevantChangeEvent, passenger_id: uuid.UUID) -> None:
@@ -63,8 +97,14 @@ def process_relevant_change(
     event: RelevantChangeEvent,
     dispatchers: dict[str, Callable[[RelevantChangeEvent, uuid.UUID], None]] | None = None,
     raise_on_failure: bool = False,
+    topology_resolver: Callable[[str, str], Sequence[tuple[str, str]]] | None = None,
 ) -> list[NotificationRecord]:
     """Identify affected passengers and dispatch notifications across configured channels (FR-063).
+
+    Hierarchy Expansion and Overlapping Deduplication (FR-065):
+    - Subscriptions to a line cover that line's stops and trips.
+    - Subscriptions to a stop cover trips serving that stop.
+    - Overlapping subscriptions for the same passenger produce exactly ONE notification.
 
     Deduplication and Resilience (FR-066):
     - Checks logical delivery boundary (event_id, passenger_id, channel).
@@ -77,11 +117,8 @@ def process_relevant_change(
     if dispatchers:
         active_dispatchers.update(dispatchers)
 
-    entities: list[tuple[str, str]] = [(event.entity_type, event.entity_id)]
-    if event.related_entities:
-        entities.extend(event.related_entities)
-
-    active_subscriptions = find_active_subscriptions_for_entities(entities)
+    entities = expand_affected_entities(event, topology_resolver=topology_resolver)
+    active_subscriptions = find_active_subscriptions_for_entities(list(entities))
     affected_passengers = set(active_subscriptions.values_list("passenger_id", flat=True))
 
     logger.info(
@@ -90,6 +127,7 @@ def process_relevant_change(
         change_type=event.change_type,
         entity_type=event.entity_type,
         entity_id=event.entity_id,
+        matched_entity_count=len(entities),
         affected_passenger_count=len(affected_passengers),
     )
 
