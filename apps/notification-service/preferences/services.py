@@ -1,3 +1,4 @@
+import datetime
 import uuid
 from typing import Any
 
@@ -5,7 +6,7 @@ import structlog
 from django.db import transaction
 
 from preferences.exceptions import InvalidChangeType, InvalidChannel
-from preferences.models import ChangeType, NotificationChannel, NotificationPreference
+from preferences.models import ChangeType, NotificationChannel, NotificationPreference, PreferenceHistory
 
 logger = structlog.get_logger(__name__)
 
@@ -25,15 +26,33 @@ def set_preference(
             raise InvalidChangeType()
 
     cleaned_change_types = sorted(list(set(enabled_change_types)))
+    now = datetime.datetime.now(datetime.UTC)
 
-    pref, created = NotificationPreference.objects.update_or_create(
-        passenger_id=passenger_id,
-        channel=channel,
-        defaults={
-            "enabled": enabled,
-            "enabled_change_types": cleaned_change_types,
-        },
-    )
+    with transaction.atomic():
+        pref, created = NotificationPreference.objects.update_or_create(
+            passenger_id=passenger_id,
+            channel=channel,
+            defaults={
+                "enabled": enabled,
+                "enabled_change_types": cleaned_change_types,
+            },
+        )
+
+        # Close any active history entry and create new snapshot (FR-068)
+        PreferenceHistory.objects.filter(
+            passenger_id=passenger_id,
+            channel=channel,
+            valid_to__isnull=True,
+        ).update(valid_to=now)
+
+        PreferenceHistory.objects.create(
+            passenger_id=passenger_id,
+            channel=channel,
+            enabled=enabled,
+            enabled_change_types=cleaned_change_types,
+            valid_from=now,
+            valid_to=None,
+        )
 
     logger.info(
         "notification_preference_saved",

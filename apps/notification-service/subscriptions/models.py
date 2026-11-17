@@ -11,12 +11,13 @@ class EntityType(models.TextChoices):
 
 
 class Subscription(BaseModel):
-    """Passenger subscription to a line, stop, or scheduled trip (FR-060, FR-061)."""
+    """Passenger subscription to a line, stop, or scheduled trip (FR-060, FR-061, FR-068)."""
 
     passenger_id = models.UUIDField(db_index=True)
     entity_type = models.CharField(max_length=16, choices=EntityType.choices)
     entity_id = models.CharField(max_length=128, db_index=True)
     active = models.BooleanField(default=True, db_index=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         db_table = "subscriptions"

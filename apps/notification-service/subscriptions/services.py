@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 import structlog
@@ -33,7 +34,8 @@ def create_subscription(passenger_id: uuid.UUID, entity_type: str, entity_id: st
             if existing.active:
                 raise SubscriptionAlreadyExists()
             existing.active = True
-            existing.save(update_fields=["active", "updated_at"])
+            existing.cancelled_at = None
+            existing.save(update_fields=["active", "cancelled_at", "updated_at"])
             logger.info(
                 "subscription_reactivated",
                 subscription_id=str(existing.id),
@@ -65,7 +67,11 @@ def update_subscription_status(subscription_id: uuid.UUID, passenger_id: uuid.UU
         raise SubscriptionNotFound()
 
     subscription.active = active
-    subscription.save(update_fields=["active", "updated_at"])
+    if active:
+        subscription.cancelled_at = None
+    else:
+        subscription.cancelled_at = datetime.datetime.now(datetime.UTC)
+    subscription.save(update_fields=["active", "cancelled_at", "updated_at"])
     logger.info(
         "subscription_status_updated",
         subscription_id=str(subscription.id),

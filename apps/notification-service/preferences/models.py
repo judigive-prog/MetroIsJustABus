@@ -40,3 +40,21 @@ class NotificationPreference(BaseModel):
 
     def __str__(self) -> str:
         return f"NotificationPreference({self.passenger_id}, channel={self.channel}, enabled={self.enabled})"
+
+
+class PreferenceHistory(BaseModel):
+    """Historical snapshot of passenger notification preference for event-time reconstruction (FR-068)."""
+
+    passenger_id = models.UUIDField(db_index=True)
+    channel = models.CharField(max_length=16, choices=NotificationChannel.choices)
+    enabled = models.BooleanField()
+    enabled_change_types = models.JSONField(default=list)
+    valid_from = models.DateTimeField(db_index=True)
+    valid_to = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        db_table = "preference_history"
+        ordering = ("-valid_from",)
+
+    def __str__(self) -> str:
+        return f"PreferenceHistory({self.passenger_id}, channel={self.channel}, valid_from={self.valid_from}, valid_to={self.valid_to})"
