@@ -1,0 +1,12 @@
+.git
+.github
+.ai
+.ruff_cache
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.test
+**/.env.example
+**/tests
+**/conftest.py
