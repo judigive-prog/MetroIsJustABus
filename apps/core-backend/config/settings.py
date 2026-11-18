@@ -62,8 +62,11 @@ TIME_ZONE = "UTC"
 USE_I18N = False
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+JWT_PRIVATE_KEY = read_secret(env.jwt_private_key_file, default="") if env.jwt_private_key_file else ""
 JWT_PUBLIC_KEY = read_secret(env.jwt_public_key_file, default="") if env.jwt_public_key_file else ""
 JWT_ISSUER = env.jwt_issuer or None
+JWT_ACCESS_TTL_SECONDS = env.jwt_access_ttl_seconds
+JWT_KEY_ID = env.jwt_key_id
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["common.auth.JWTAuthentication"],

@@ -86,3 +86,19 @@ class RoleAssignment(BaseModel):
 
     def __str__(self) -> str:
         return f"RoleAssignment(user_id={self.user_id}, role={self.role}, active={self.active})"
+
+
+class AuthSession(BaseModel):
+    """Issued authentication session allowing explicit logout revocation (FR-021)."""
+
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="sessions")
+    role = models.CharField(max_length=16, choices=RoleAssignment.Role.choices)
+    issued_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "auth_sessions"
+
+    def __str__(self) -> str:
+        return f"AuthSession(id={self.id}, user_id={self.user_id}, revoked={self.revoked_at is not None})"
