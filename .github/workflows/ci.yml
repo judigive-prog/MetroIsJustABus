@@ -175,6 +175,21 @@ jobs:
         # The ticketing apps have no application migrations yet. The tests still use PostgreSQL.
         run: uv run --locked --group contracts --with pytest --with pytest-django pytest --no-migrations -m "not system"
 
+  test-core:
+    name: Tests (core-backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run pytest
+        working-directory: apps/core-backend
+        run: uv run --group dev pytest -m "not integration and not system"
+
   test-notification:
     name: Tests (notification-service)
     runs-on: ubuntu-latest
@@ -192,7 +207,7 @@ jobs:
 
   build-images:
     name: Build image (${{ matrix.name }})
-    needs: [lint, contracts, secret-scan, test-metro-common, test-payment-sim, test-ticketing, test-notification]
+    needs: [lint, contracts, secret-scan, test-metro-common, test-payment-sim, test-ticketing, test-core, test-notification]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -202,6 +217,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { name: core-backend, dockerfile: apps/core-backend/Dockerfile }
           - { name: notification-service, dockerfile: apps/notification-service/Dockerfile }
           - { name: ticketing-service, dockerfile: apps/ticketing-service/Dockerfile }
           - { name: payment-sim, dockerfile: simulators/payment-sim/Dockerfile }
