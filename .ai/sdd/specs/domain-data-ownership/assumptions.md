@@ -1,15 +1,16 @@
 # DES-01 — Assumption register
 
-Version 0.1, 2026-11-10. Every entry below is **Pending**: all fourteen Linear
-decision issues were in Backlog when inspected. MET-169 does not approve them.
-The working proposals are recorded to expose their impact on the design.
+The initial version 0.1, dated 2026-11-10, recorded all fourteen Linear
+decision issues in Backlog. On 2026-11-19, A-04 was reconciled with the reviewed
+requirements v0.2 decision and linked to its decision record below. Refer to
+the individual decision records for current approval evidence.
 
 | Assumption / source | Question | Working proposal | Consequence for this model | Traceability |
 |---|---|---|---|---|
 | [A-01 / MET-154](https://linear.app/metroisjustabus-ase/issue/MET-154) | Schedule conditions | Day-of-week, holidays or special dates are the working scope. | Variant selection, precedence, overnight and DST representation remain provisional. | FR-006, FR-072, NFR-033 |
 | [A-02 / MET-155](https://linear.app/metroisjustabus-ase/issue/MET-155) | Disruption source | Staff register delays/cancellations/diversions; a simulator uses the staff boundary; no GPS feed. | Keep source/author/history explicit; no telemetry entities invented. | FR-010–013, FR-090–096 |
 | [A-03 / MET-156](https://linear.app/metroisjustabus-ase/issue/MET-156) | Boarding attribution | Stop-entrance validations are proposed to be split among candidate trips using historical demand, initially equal shares. | Document observation versus attribution. No chosen formula, weights or measured occupancy; attribution implementation waits. | FR-050–056 |
-| [A-04 / MET-157](https://linear.app/metroisjustabus-ase/issue/MET-157) | Payment scope | A simulated provider is proposed. | SimulatedPayment remains a separate owner; no real payment or card-data model. | FR-032, FR-033, FR-037 |
+| [A-04 / MET-157](https://linear.app/metroisjustabus-ase/issue/MET-157) | Payment scope | Simulated provider, as recorded in the reviewed v0.2 decision. See [ADR A-04](../../../steering/decisions/A-04-simulated-payment-scope.md). | SimulatedPayment owns synthetic payment state; ticketing owns issuance and recovery. The ADR records failure scenarios and implementation evidence. | FR-032, FR-033, FR-036, FR-037 |
 | [A-05 / MET-158](https://linear.app/metroisjustabus-ase/issue/MET-158) | Validator device/API | A fixed entrance device plus validation API and simulator is proposed. | Validator ownership, credential binding and final input/time rules need feature review. | FR-040–047 |
 | [A-06 / MET-159](https://linear.app/metroisjustabus-ase/issue/MET-159) | Notification channels | In-app plus an external simulated/sandboxed channel is proposed; the stack chooses sandbox email. | Channel/preferences/attempt model is extensible. Sandbox email is a team stack choice, not teacher approval. | FR-060–069 |
 | [A-07 / MET-160](https://linear.app/metroisjustabus-ase/issue/MET-160) | Staff roles | One initial staff role is proposed with room for later splitting. | RoleAssignment is conceptual; staff provisioning and exact privileges require agreement. | FR-100, FR-101 |
