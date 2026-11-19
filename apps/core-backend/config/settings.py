@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "common",
     "accounts",
+    "network",
 ]
 
 MIDDLEWARE = [
