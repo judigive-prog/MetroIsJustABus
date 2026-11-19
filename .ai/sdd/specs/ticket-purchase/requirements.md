@@ -72,6 +72,8 @@ It is bounded (one write path, one simulator, one event) and it concentrates the
 
 **Finding:** the statement never mentions *payment*, pricing at purchase, or refunds. v0.2 records the simulated payment as a **team assumption** (FR-037, A-04, both marked (A)); "no refunds" is A-12. They are not stakeholder requirements.
 
+**A-04 decision record:** [ADR A-04](../../../steering/decisions/A-04-simulated-payment-scope.md) records the existing v0.2 section 7 team-review decision to keep payment simulated, its source evidence, component impacts and verifying scenarios.
+
 ### 2.2 Requirements specification v0.2 used by this feature [V]
 | v0.2 ID | Pri | Content (abridged) | Used by |
 |---|---|---|---|
