@@ -44,18 +44,26 @@ class JWTAuthentication(BaseAuthentication):
 
         from accounts.models import AuthSession, User
         from common.clock import default_clock
+        from common.permissions import HUMAN_ROLES
+
+        token_role = str(claims.get("role", ""))
+        if token_role not in HUMAN_ROLES:
+            raise AuthenticationFailed()
 
         active = AuthSession.objects.filter(
             id=session_id,
             user_id=user_id,
+            role=token_role,
             revoked_at__isnull=True,
             expires_at__gt=default_clock.now(),
             user__status=User.Status.ACTIVE,
+            user__role_assignments__role=token_role,
+            user__role_assignments__active=True,
         ).exists()
         if not active:
             raise AuthenticationFailed()
 
-        user = AuthenticatedUser(id=user_id, role=str(claims.get("role", "")), session_id=session_id)
+        user = AuthenticatedUser(id=user_id, role=token_role, session_id=session_id)
         return user, claims
 
     def authenticate_header(self, request: Request) -> str:

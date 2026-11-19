@@ -8,8 +8,10 @@ from rest_framework.request import Request
 if TYPE_CHECKING:
     from rest_framework.views import APIView
 
+VISITOR = "visitor"
 PASSENGER = "passenger"
 STAFF = "staff"
+HUMAN_ROLES = frozenset({PASSENGER, STAFF})
 
 
 class DenyAll(BasePermission):
@@ -17,6 +19,14 @@ class DenyAll(BasePermission):
 
     def has_permission(self, request: Request, view: APIView) -> bool:
         return False
+
+
+class IsAuthenticatedRole(BasePermission):
+    """Allows any authenticated human account holding a recognized `passenger` or `staff` role (FR-100)."""
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, "role", None) in HUMAN_ROLES)
 
 
 class IsPassenger(BasePermission):

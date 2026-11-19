@@ -1,6 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,6 +17,7 @@ from accounts.api.serializers import (
 from accounts.models import RoleAssignment
 from accounts.tokens import jwks_body
 from common.clock import default_clock, to_iso
+from common.permissions import IsAuthenticatedRole
 from common.schema import ErrorResponseSerializer
 
 
@@ -86,7 +87,7 @@ class LoginView(APIView):
 class LogoutView(APIView):
     """Revoke the caller's active authentication session (FR-021)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedRole]
 
     @extend_schema(
         summary="End the current session (FR-021)",
@@ -107,7 +108,7 @@ class LogoutView(APIView):
 class SessionView(APIView):
     """Return the caller's active authenticated session details (FR-021)."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedRole]
 
     @extend_schema(
         summary="Inspect the current authenticated session (FR-021)",

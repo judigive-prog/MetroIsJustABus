@@ -4,13 +4,33 @@ from unittest.mock import MagicMock
 import pytest
 
 from common.auth import AuthenticatedUser
-from common.permissions import DenyAll, IsPassenger, IsStaff
+from common.permissions import DenyAll, IsAuthenticatedRole, IsPassenger, IsStaff
 
 
 @pytest.mark.unit
 @pytest.mark.req("NFR-050")
 def test_deny_all_always_returns_false() -> None:
     assert DenyAll().has_permission(MagicMock(), MagicMock()) is False
+
+
+@pytest.mark.unit
+@pytest.mark.req("FR-100")
+@pytest.mark.req("NFR-050")
+def test_is_authenticated_role_allows_only_passenger_or_staff() -> None:
+    permission = IsAuthenticatedRole()
+    view = MagicMock()
+
+    passenger_req = MagicMock(user=AuthenticatedUser(id=uuid.uuid4(), role="passenger"))
+    staff_req = MagicMock(user=AuthenticatedUser(id=uuid.uuid4(), role="staff"))
+    unknown_req = MagicMock(user=AuthenticatedUser(id=uuid.uuid4(), role="admin"))
+    empty_req = MagicMock(user=AuthenticatedUser(id=uuid.uuid4(), role=""))
+    anon_req = MagicMock(user=None)
+
+    assert permission.has_permission(passenger_req, view) is True
+    assert permission.has_permission(staff_req, view) is True
+    assert permission.has_permission(unknown_req, view) is False
+    assert permission.has_permission(empty_req, view) is False
+    assert permission.has_permission(anon_req, view) is False
 
 
 @pytest.mark.unit
