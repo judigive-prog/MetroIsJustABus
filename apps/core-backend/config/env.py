@@ -28,8 +28,11 @@ class Env(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password_file: Path | None = None
 
+    jwt_private_key_file: Path | None = None
     jwt_public_key_file: Path | None = None
     jwt_issuer: str | None = None
+    jwt_access_ttl_seconds: int = 3600
+    jwt_key_id: str = "core-rs256-v1"
 
 
 env = Env()  # type: ignore[call-arg]  # values come from the environment, validated at startup
