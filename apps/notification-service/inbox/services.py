@@ -5,7 +5,7 @@ import structlog
 from django.db import transaction
 
 from inbox.exceptions import NotificationNotFound
-from inbox.models import InboxNotification
+from inbox.models import InboxEvent, InboxNotification
 from inbox.selectors import get_passenger_notification
 
 logger = structlog.get_logger(__name__)
@@ -71,3 +71,35 @@ def mark_all_as_read(passenger_id: uuid.UUID) -> int:
     ).update(read_at=now, updated_at=now)
     logger.info("inbox_all_marked_read", passenger_id=str(passenger_id), count=updated_count)
     return updated_count
+
+
+def record_inbox_event(
+    event_id: uuid.UUID,
+    event_type: str,
+    producer: str,
+    correlation_id: str,
+    payload: dict,
+) -> tuple[InboxEvent, bool]:
+    """Record a consumed event in the inbox_event table for at-least-once deduplication (conventions.md, Events).
+
+    Returns (InboxEvent, created).
+    """
+    with transaction.atomic():
+        inbox_event, created = InboxEvent.objects.get_or_create(
+            event_id=event_id,
+            defaults={
+                "event_type": event_type,
+                "producer": producer,
+                "correlation_id": correlation_id,
+                "payload": payload,
+            },
+        )
+        if created:
+            logger.info(
+                "inbox_event_recorded",
+                event_id=str(event_id),
+                event_type=event_type,
+                producer=producer,
+                correlation_id=correlation_id,
+            )
+        return inbox_event, created
