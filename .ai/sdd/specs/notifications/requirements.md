@@ -33,7 +33,7 @@
 | **NFR-020** | Component failures are isolated: notifications failure must not affect consultation or ticketing. | Must | Resilience | [MET-96](https://linear.app/metroisjustabus-ase/issue/MET-96) |
 | **NFR-021** | Notification events shall be retained during notification outages and processed upon recovery. | Must | Resilience (A) | [MET-97](https://linear.app/metroisjustabus-ase/issue/MET-97) |
 | **NFR-022** | Communication failures shall not cause duplicate notification delivery. | Must | Resilience | [MET-98](https://linear.app/metroisjustabus-ase/issue/MET-98) |
-| **NFR-042** | Notifications should be issued within 30s of event under nominal load. | Should | Performance (A) | [MET-110](https://linear.app/metroisjustabus-ase/issue/MET-110) |
+| **NFR-042** | Notifications should be issued within 30s of event under nominal load (verified in docs/benchmarks/notification-latency.md). | Should | Performance (A) | [MET-110](https://linear.app/metroisjustabus-ase/issue/MET-110) |
 | **NFR-050** | Authenticate users and authorize protected operations by role. | Must | Security | [MET-113](https://linear.app/metroisjustabus-ase/issue/MET-113) |
 | **NFR-070** | Correlated structured logging with `X-Correlation-Id`. | Must | Observability | [MET-125](https://linear.app/metroisjustabus-ase/issue/MET-125) |
 | **NFR-071** | Health endpoints `/health/live` and `/health/ready`. | Must | Observability | [MET-126](https://linear.app/metroisjustabus-ase/issue/MET-126) |
