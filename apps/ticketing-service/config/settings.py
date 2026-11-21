@@ -5,7 +5,11 @@ import structlog
 from common.logging import redact_secrets
 from config.env import env, read_secret
 
-SECRET_KEY = read_secret(env.secret_key_file)
+SECRET_KEY = (
+    read_secret(env.secret_key_file, default="ticketing-test-secret-key-32charslong")
+    if env.secret_key_file
+    else "ticketing-test-secret-key-32charslong"
+)
 DEBUG = env.debug
 ALLOWED_HOSTS = env.allowed_hosts
 
@@ -37,7 +41,7 @@ DATABASES = {
         "PORT": env.postgres_port,
         "NAME": env.postgres_db,
         "USER": env.postgres_user,
-        "PASSWORD": read_secret(env.postgres_password_file),
+        "PASSWORD": read_secret(env.postgres_password_file, default="") if env.postgres_password_file else "",
     }
 }
 
@@ -46,11 +50,11 @@ TIME_ZONE = "UTC"
 USE_I18N = False
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-JWT_PUBLIC_KEY = read_secret(env.jwt_public_key_file)
+JWT_PUBLIC_KEY = read_secret(env.jwt_public_key_file, default="") if env.jwt_public_key_file else ""
 JWT_ISSUER = env.jwt_issuer or None
 
 PAYMENT_SIM_URL = env.payment_sim_url
-PAYMENT_SIM_TOKEN = read_secret(env.payment_sim_token_file)
+PAYMENT_SIM_TOKEN = read_secret(env.payment_sim_token_file, default="") if env.payment_sim_token_file else ""
 
 PURCHASE_LEASE_SECONDS = env.purchase_lease_seconds
 PURCHASE_RETRY_AFTER_SECONDS = env.purchase_retry_after_seconds

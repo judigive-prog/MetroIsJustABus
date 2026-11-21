@@ -31,6 +31,32 @@
         ],
         "type": "object"
       },
+      "PaginatedTicketResponseList": {
+        "properties": {
+          "next": {
+            "example": "http://api.example.org/accounts/?cursor=cD00ODY%3D\"",
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "previous": {
+            "example": "http://api.example.org/accounts/?cursor=cj0xJnA9NDg3",
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TicketResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
       "PaginatedTicketTypeResponseList": {
         "properties": {
           "next": {
@@ -103,7 +129,7 @@
             "type": "integer"
           },
           "status": {
-            "$ref": "#/components/schemas/StatusEnum"
+            "$ref": "#/components/schemas/PurchaseResponseStatusEnum"
           },
           "ticketId": {
             "format": "uuid",
@@ -124,7 +150,7 @@
         ],
         "type": "object"
       },
-      "StatusEnum": {
+      "PurchaseResponseStatusEnum": {
         "description": "* `PENDING` - PENDING\n* `COMPLETED` - COMPLETED\n* `FAILED` - FAILED",
         "enum": [
           "PENDING",
@@ -132,6 +158,124 @@
           "FAILED"
         ],
         "type": "string"
+      },
+      "ResultEnum": {
+        "description": "* `ACCEPTED` - ACCEPTED\n* `REJECTED` - REJECTED",
+        "enum": [
+          "ACCEPTED",
+          "REJECTED"
+        ],
+        "type": "string"
+      },
+      "TicketResponse": {
+        "properties": {
+          "activatedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "issuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "priceCents": {
+            "type": "integer"
+          },
+          "remainingJourneys": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "stateChanges": {
+            "items": {
+              "$ref": "#/components/schemas/TicketStateChange"
+            },
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketResponseStatusEnum"
+          },
+          "terms": {},
+          "ticketType": {
+            "$ref": "#/components/schemas/TicketTypeSummary"
+          },
+          "validUntil": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "validationHistory": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationHistoryItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "activatedAt",
+          "createdAt",
+          "currency",
+          "id",
+          "issuedAt",
+          "priceCents",
+          "remainingJourneys",
+          "status",
+          "terms",
+          "ticketType",
+          "validUntil",
+          "validationHistory"
+        ],
+        "type": "object"
+      },
+      "TicketResponseStatusEnum": {
+        "description": "* `ISSUED` - ISSUED\n* `ACTIVE` - ACTIVE\n* `USED_UP` - USED_UP\n* `EXPIRED` - EXPIRED\n* `CANCELLED` - CANCELLED",
+        "enum": [
+          "ISSUED",
+          "ACTIVE",
+          "USED_UP",
+          "EXPIRED",
+          "CANCELLED"
+        ],
+        "type": "string"
+      },
+      "TicketStateChange": {
+        "properties": {
+          "fromStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "toStatus": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "occurredAt",
+          "reason",
+          "toStatus"
+        ],
+        "type": "object"
       },
       "TicketTypeResponse": {
         "properties": {
@@ -162,6 +306,69 @@
           "id",
           "name",
           "priceCents"
+        ],
+        "type": "object"
+      },
+      "TicketTypeSummary": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ValidationHistoryItem": {
+        "properties": {
+          "decidedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deviceTime": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ResultEnum"
+          },
+          "stopId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "validatorId": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "decidedAt",
+          "id",
+          "result"
         ],
         "type": "object"
       }
@@ -451,6 +658,139 @@
         "summary": "List ticket types that can be bought (FR-031)",
         "tags": [
           "ticket-types"
+        ]
+      }
+    },
+    "/api/ticketing/v1/tickets": {
+      "get": {
+        "operationId": "tickets_list",
+        "parameters": [
+          {
+            "description": "The pagination cursor value.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of results to return per page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedTicketResponseList"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List passenger tickets (FR-034)",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/api/ticketing/v1/tickets/{ticket_id}": {
+      "get": {
+        "operationId": "tickets_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Retrieve passenger ticket and validation history (FR-034)",
+        "tags": [
+          "tickets"
         ]
       }
     }

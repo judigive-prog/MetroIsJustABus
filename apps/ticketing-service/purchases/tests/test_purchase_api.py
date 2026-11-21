@@ -7,7 +7,7 @@ from threading import Barrier
 from unittest.mock import Mock
 
 import pytest
-from django.db import connections
+from django.db import connection, connections
 from jsonschema import Draft202012Validator, FormatChecker
 from rest_framework.response import Response
 from rest_framework.test import APIClient
@@ -125,6 +125,7 @@ def test_completion_replays_after_retirement_and_rejects_changed_payload(
     assert TicketStateChange.objects.count() == OutboxEvent.objects.count() == 1
 
 
+@pytest.mark.skipif(connection.vendor == "sqlite", reason="Concurrent test requires PostgreSQL row locking")
 @pytest.mark.req("FR-033")
 @pytest.mark.req("NFR-013")
 @pytest.mark.django_db(transaction=True)
