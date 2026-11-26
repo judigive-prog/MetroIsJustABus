@@ -1,4 +1,5 @@
 import json
+import uuid
 from io import StringIO
 
 import pytest
@@ -6,10 +7,14 @@ from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from rest_framework.test import APIClient
 
-from network.models import Line, Stop
+from network.models import Line, PatternStop, RoutePattern, Stop
 
 LINES_URL = "/api/core/v1/lines"
 STOPS_URL = "/api/core/v1/stops"
+
+
+def _line_stops_url(line_id: uuid.UUID) -> str:
+    return f"/api/core/v1/lines/{line_id}/stops"
 
 
 def _collect_paginated_codes(client: APIClient, path: str, limit: int) -> list[str]:
@@ -104,10 +109,89 @@ def test_network_lists_support_limit_and_cursor_pagination() -> None:
 
 
 @pytest.mark.django_db
+@pytest.mark.req("FR-002")
+@pytest.mark.req("FR-024")
+@pytest.mark.req("NFR-070")
+def test_line_ordered_stops_preserves_non_alphabetical_sequences_directions_and_loops() -> None:
+    call_command("seed_network")
+    l1 = Line.objects.get(code="L1")
+    l2 = Line.objects.get(code="L2")
+    client = APIClient()
+
+    l1_resp = client.get(_line_stops_url(l1.id), HTTP_X_CORRELATION_ID="corr-l1-stops")
+    l2_resp = client.get(
+        _line_stops_url(l2.id),
+        HTTP_X_CORRELATION_ID="corr-l2-stops",
+        HTTP_AUTHORIZATION="Bearer not-required-for-public-network",
+    )
+
+    assert l1_resp.status_code == 200
+    assert l1_resp["X-Correlation-Id"] == "corr-l1-stops"
+    l1_body = l1_resp.json()
+    assert l1_body["lineId"] == str(l1.id)
+    assert l1_body["lineCode"] == "L1"
+    assert [(p["directionLabel"], [s["code"] for s in p["stops"]]) for p in l1_body["patterns"]] == [
+        ("Inbound", ["S-HOS", "S-CEN", "S-UNI"]),
+        ("Outbound", ["S-UNI", "S-CEN", "S-HOS"]),
+    ]
+    assert [s["position"] for s in l1_body["patterns"][1]["stops"]] == [1, 2, 3]
+
+    assert l2_resp.status_code == 200
+    assert l2_resp["X-Correlation-Id"] == "corr-l2-stops"
+    l2_body = l2_resp.json()
+    assert [(p["directionLabel"], [s["code"] for s in p["stops"]]) for p in l2_body["patterns"]] == [
+        ("Loop", ["S-HOS", "S-RIV", "S-CEN", "S-HOS"]),
+    ]
+    loop_stops = l2_body["patterns"][0]["stops"]
+    assert [s["position"] for s in loop_stops] == [1, 2, 3, 4]
+    assert loop_stops[0]["stopId"] == loop_stops[3]["stopId"]
+
+
+@pytest.mark.django_db
+@pytest.mark.req("FR-002")
+@pytest.mark.req("FR-103")
+def test_line_ordered_stops_excludes_draft_and_retired_patterns_and_handles_empty_line() -> None:
+    line = Line.objects.create(code="L-NEW", name="New Line")
+    stop = Stop.objects.create(code="S-1", name="Stop One")
+    draft = RoutePattern.objects.create(line=line, direction_label="Outbound", revision=2, status="DRAFT")
+    retired = RoutePattern.objects.create(line=line, direction_label="Outbound", revision=1, status="RETIRED")
+    PatternStop.objects.create(pattern=draft, stop=stop, position=1)
+    PatternStop.objects.create(pattern=retired, stop=stop, position=1)
+
+    response = APIClient().get(_line_stops_url(line.id))
+
+    assert response.status_code == 200
+    assert response.json()["patterns"] == []
+
+
+@pytest.mark.django_db
+@pytest.mark.req("FR-002")
+@pytest.mark.req("FR-103")
+@pytest.mark.req("NFR-063")
+def test_line_ordered_stops_returns_404_for_missing_or_inactive_line() -> None:
+    inactive_line = Line.objects.create(code="L-OFF", name="Inactive Line", status=Line.Status.INACTIVE)
+    client = APIClient()
+
+    missing_resp = client.get(_line_stops_url(uuid.uuid4()), HTTP_X_CORRELATION_ID="corr-missing-line")
+    inactive_resp = client.get(_line_stops_url(inactive_line.id), HTTP_X_CORRELATION_ID="corr-inactive-line")
+
+    assert missing_resp.status_code == 404
+    assert missing_resp.json()["error"]["code"] == "NOT_FOUND"
+    assert missing_resp.json()["error"]["correlationId"] == "corr-missing-line"
+
+    assert inactive_resp.status_code == 404
+    assert inactive_resp.json()["error"]["code"] == "NOT_FOUND"
+    assert inactive_resp.json()["error"]["correlationId"] == "corr-inactive-line"
+
+
+@pytest.mark.django_db
 @pytest.mark.req("FR-001")
-def test_network_models_enforce_code_uniqueness_and_non_empty_constraints() -> None:
-    Line.objects.create(code="L1", name="Line One")
-    Stop.objects.create(code="S1", name="Stop One")
+@pytest.mark.req("FR-002")
+def test_network_models_enforce_code_uniqueness_positions_and_non_empty_constraints() -> None:
+    line = Line.objects.create(code="L1", name="Line One")
+    stop = Stop.objects.create(code="S1", name="Stop One")
+    pattern = RoutePattern.objects.create(line=line, direction_label="Outbound", revision=1)
+    PatternStop.objects.create(pattern=pattern, stop=stop, position=1)
 
     with pytest.raises(IntegrityError), transaction.atomic():
         Line.objects.create(code="L1", name="Duplicate Line")
@@ -121,13 +205,29 @@ def test_network_models_enforce_code_uniqueness_and_non_empty_constraints() -> N
     with pytest.raises(IntegrityError), transaction.atomic():
         Stop.objects.create(code="S2", name="")
 
+    with pytest.raises(IntegrityError), transaction.atomic():
+        RoutePattern.objects.create(line=line, direction_label="", revision=1)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        RoutePattern.objects.create(line=line, direction_label="Outbound", revision=2, status="PUBLISHED")
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PatternStop.objects.create(pattern=pattern, stop=stop, position=1)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PatternStop.objects.create(pattern=pattern, stop=stop, position=0)
+
 
 @pytest.mark.unit
 @pytest.mark.req("FR-001")
-def test_openapi_schema_includes_network_list_endpoints_without_warnings() -> None:
+@pytest.mark.req("FR-002")
+def test_openapi_schema_includes_network_endpoints_without_warnings() -> None:
     output = StringIO()
     call_command("spectacular", format="openapi-json", validate=True, fail_on_warn=True, stdout=output)
     schema = json.loads(output.getvalue())
 
     assert "200" in schema["paths"][LINES_URL]["get"]["responses"]
     assert "200" in schema["paths"][STOPS_URL]["get"]["responses"]
+    line_stops_op = schema["paths"]["/api/core/v1/lines/{line_id}/stops"]["get"]
+    assert "200" in line_stops_op["responses"]
+    assert "404" in line_stops_op["responses"]
