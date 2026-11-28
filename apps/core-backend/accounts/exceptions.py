@@ -13,6 +13,12 @@ class InvalidAccountDataError(DomainError):
     message = "Valid email and non-empty full name are required."
 
 
+class InvalidCredentialsError(DomainError):
+    code = "INVALID_CREDENTIALS"
+    http_status = 401
+    message = "Invalid email or password."
+
+
 class DuplicateAccountError(DomainError):
     code = "ACCOUNT_ALREADY_EXISTS"
     http_status = 409
